@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   createRootResolver,
-  dispatchApply,
+  dispatchAction,
   emptyLabel,
   formatFooter,
   loadBoard,
@@ -110,10 +110,17 @@ function Board(props: {
   }
 
   const send = async (scope: "next" | "all" | "archive" | "update", current: Change) => {
-    const sent = await dispatchApply({
+    const sent = await dispatchAction({
       change: current,
       scope,
-      send: (name, text) => context.client.session.command({ sessionID: props.panel.sessionID, name, text }),
+      send: (skill, text) =>
+        context.client.session
+          .prompt({
+            sessionID: props.panel.sessionID,
+            text,
+            skills: [{ id: skill } as never],
+          })
+          .then(() => undefined),
       notify: (message, variant) => toast(message, variant),
     })
 

@@ -261,17 +261,24 @@ export function stepIndex(current: number, delta: number, count: number): number
   return (current + delta + count) % count
 }
 
+/** 面板動作對應的 OpenSpec skill。 */
+export const SKILLS = {
+  apply: "openspec-apply-change",
+  archive: "openspec-archive-change",
+  update: "openspec-update-change",
+} as const
+
 export type DispatchOptions = {
   change: Change
   scope: "next" | "all" | "archive" | "update"
-  send: (name: string, text: string) => Promise<void>
+  send: (skill: string, text: string) => Promise<void>
   notify: (message: string, variant: "success" | "warning") => void
 }
 
-/** 送出 apply／archive／update 指令；失敗時退回顯示完整指令字串。 */
-export async function dispatchApply(options: DispatchOptions): Promise<boolean> {
-  const command =
-    options.scope === "archive" ? "opsx-archive" : options.scope === "update" ? "opsx-update" : "opsx-apply"
+/** 以 skill 觸發動作；失敗時退回顯示 skill 名稱與參數。 */
+export async function dispatchAction(options: DispatchOptions): Promise<boolean> {
+  const skill =
+    options.scope === "archive" ? SKILLS.archive : options.scope === "update" ? SKILLS.update : SKILLS.apply
   const text = options.scope === "next" ? scopedArgs(options.change) : options.change.name
   if (!text) {
     options.notify("沒有未完成任務", "warning")
@@ -279,11 +286,11 @@ export async function dispatchApply(options: DispatchOptions): Promise<boolean> 
   }
 
   try {
-    await options.send(command, text)
-    options.notify(`已送出 /${command} ${text}`, "success")
+    await options.send(skill, text)
+    options.notify(`已送出 ${skill} ${text}`, "success")
     return true
   } catch {
-    options.notify(`/${command} ${text}`, "warning")
+    options.notify(`${skill} ${text}`, "warning")
     return false
   }
 }

@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { after, before, describe, test } from "node:test"
 import {
   createRootResolver,
-  dispatchApply,
+  dispatchAction,
   emptyLabel,
   formatFooter,
   loadBoard,
@@ -237,10 +237,10 @@ describe("formatFooter", () => {
   })
 })
 
-describe("dispatchApply", () => {
-  test("sends the scoped command", async () => {
+describe("dispatchAction", () => {
+  test("sends the scoped request through a skill", async () => {
     const calls: string[][] = []
-    const ok = await dispatchApply({
+    const ok = await dispatchAction({
       change: change("alpha", 2),
       scope: "next",
       send: async (name, text) => {
@@ -249,12 +249,12 @@ describe("dispatchApply", () => {
       notify: () => {},
     })
     assert.equal(ok, true)
-    assert.deepEqual(calls, [["opsx-apply", "alpha 只做 1.1"]])
+    assert.deepEqual(calls, [["openspec-apply-change", "alpha 只做 1.1"]])
   })
 
-  test("falls back to the full command when sending fails", async () => {
+  test("falls back to the skill name when sending fails", async () => {
     const notes: string[] = []
-    const ok = await dispatchApply({
+    const ok = await dispatchAction({
       change: change("beta", 3),
       scope: "all",
       send: async () => {
@@ -263,12 +263,12 @@ describe("dispatchApply", () => {
       notify: (message) => notes.push(message),
     })
     assert.equal(ok, false)
-    assert.deepEqual(notes, ["/opsx-apply beta"])
+    assert.deepEqual(notes, ["openspec-apply-change beta"])
   })
 
   test("does not send when there is no next task", async () => {
     const notes: string[] = []
-    const ok = await dispatchApply({
+    const ok = await dispatchAction({
       change: change("gamma", 1, 1),
       scope: "next",
       send: async () => {},
@@ -278,9 +278,9 @@ describe("dispatchApply", () => {
     assert.deepEqual(notes, ["沒有未完成任務"])
   })
 
-  test("sends the update command", async () => {
+  test("sends the update skill", async () => {
     const calls: string[][] = []
-    const ok = await dispatchApply({
+    const ok = await dispatchAction({
       change: change("alpha", 2),
       scope: "update",
       send: async (name, text) => {
@@ -289,12 +289,12 @@ describe("dispatchApply", () => {
       notify: () => {},
     })
     assert.equal(ok, true)
-    assert.deepEqual(calls, [["opsx-update", "alpha"]])
+    assert.deepEqual(calls, [["openspec-update-change", "alpha"]])
   })
 
-  test("sends the archive command", async () => {
+  test("sends the archive skill", async () => {
     const calls: string[][] = []
-    const ok = await dispatchApply({
+    const ok = await dispatchAction({
       change: change("done", 2, 2),
       scope: "archive",
       send: async (name, text) => {
@@ -303,6 +303,6 @@ describe("dispatchApply", () => {
       notify: () => {},
     })
     assert.equal(ok, true)
-    assert.deepEqual(calls, [["opsx-archive", "done"]])
+    assert.deepEqual(calls, [["openspec-archive-change", "done"]])
   })
 })
