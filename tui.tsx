@@ -72,6 +72,7 @@ function Board(props: {
   panel: PanelInput
   state: () => BoardState
   follow: (sessionID?: string) => void
+  refresh: () => void
 }) {
   const context = usePlugin()
   const [index, setIndex] = createSignal(0)
@@ -199,6 +200,7 @@ function Board(props: {
       },
       { id: "openspec-board.next-task", bind: "n", run: () => void apply("next") },
       { id: "openspec-board.detail", bind: "v", run: () => void detail() },
+      { id: "openspec-board.refresh", bind: "u", run: () => props.refresh() },
       { id: "openspec-board.all-tasks", bind: "a", run: () => void apply("all") },
       { id: "openspec-board.archive", bind: "x", run: () => void archive() },
       { id: "openspec-board.close", bind: "q", run: () => props.panel.close() },
@@ -208,6 +210,7 @@ function Board(props: {
       "openspec-board.down",
       "openspec-board.next-task",
       "openspec-board.detail",
+      "openspec-board.refresh",
       "openspec-board.all-tasks",
       "openspec-board.archive",
       "openspec-board.close",
@@ -231,7 +234,7 @@ function Board(props: {
         )}
       </For>
       {line("─".repeat(width()), "#5a5f7a")}
-      {line("   j/k 移動   v 全文   n 下一個任務   a 整張   x 封存   q 關閉", "#8a8a8a")}
+      {line("   j/k 移動   v 全文   n 下一個   u 更新   a 整張   x 封存   q 關閉", "#8a8a8a")}
     </box>
   )
 }
@@ -277,16 +280,21 @@ export default disabled()
           })
         }
 
-        const watchDir = (target: string) => {
-          stopConfig?.()
+        /** u：重新解析並重讀，手動更新用。 */
+        const refresh = () => {
+          const target = dir()
+          resolver.forget(target)
+          void boot(target)
+        }
+
+        const watchDir = (target: string) => {          stopConfig?.()
           stopConfig = watchConfig(target, () => {
             resolver.forget(target)
             void boot(target)
           })
         }
 
-        const switchDir = (next: string) => {
-          if (!next || sameDir(next, dir())) return
+        const switchDir = (next: string) => {          if (!next || sameDir(next, dir())) return
           setDir(next)
           stopWatching()
           setState({ kind: "no-openspec" })
@@ -361,7 +369,7 @@ export default disabled()
           append: "session.panel",
           render: (panel) => (
             <Show when={panel.name === PANEL_NAME}>
-              <Board panel={panel} state={state} follow={follow} />
+              <Board panel={panel} state={state} follow={follow} refresh={refresh} />
             </Show>
           ),
         })
