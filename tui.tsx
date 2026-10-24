@@ -1,9 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import { Plugin, usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
-import { For, Show, createEffect, createSignal } from "solid-js"
-import { existsSync, appendFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { For, Show, createSignal } from "solid-js"
+import { existsSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -22,14 +21,6 @@ import {
 const PLUGIN_ID = "openspec-board"
 const PANEL_NAME = "openspec.board"
 const SLASH_NAME = "opsx"
-const MOUSE_LOG = join(tmpdir(), "openspec-board-mouse.log")
-
-/** 暫時確認 footer 有沒有收到滑鼠事件。 */
-function trace(event: string) {
-  try {
-    appendFileSync(MOUSE_LOG, `${new Date().toISOString()} ${event}\n`)
-  } catch {}
-}
 
 function disabled(): boolean {
   if (process.env.OPENCODE_OPENSPEC_BOARD_DISABLED === "1") return true
@@ -58,33 +49,17 @@ function fit(value: string, width: number): string {
 function Footer(props: { text: () => string | undefined; onOpen: () => void }) {
   const context = usePlugin()
   const [hover, setHover] = createSignal(false)
-  const subdued = () => context.theme.text.subdued
-  const accent = () => context.theme.text.feedback.info.default
-
-  const theme = context.theme as any
-  trace(`theme keys=${JSON.stringify(Object.keys(theme ?? {}))}`)
-  trace(`text keys=${JSON.stringify(Object.keys(theme?.text ?? {}))}`)
-  trace(`text.default=${String(theme?.text?.default)}`)
-
-  createEffect(() => trace(`hover=${hover()} base=${String(subdued())} accent=${String(accent())}`))
+  const subdued = () => context.theme.text.muted
+  const accent = () => context.theme.text.base
 
   return (
     <Show when={props.text()}>
       {(line) => (
         <text
           fg={hover() ? accent() : subdued()}
-          onMouseOver={() => {
-            trace("over")
-            setHover(true)
-          }}
-          onMouseOut={() => {
-            trace("out")
-            setHover(false)
-          }}
-          onMouseDown={() => {
-            trace("down")
-            props.onOpen()
-          }}
+          onMouseOver={() => setHover(true)}
+          onMouseOut={() => setHover(false)}
+          onMouseDown={props.onOpen}
         >
           {line()}
         </text>
