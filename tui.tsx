@@ -234,8 +234,8 @@ function Board(props: {
         )}
       </For>
       {line("─".repeat(width()), "#5a5f7a")}
-      {line("   j/k 移動   q 關閉", "#8a8a8a")}
       {line("   v 全文   n 下一個   u 更新   a 整張   x 封存", "#8a8a8a")}
+      {line("   j/k 移動   q 關閉", "#8a8a8a")}
     </box>
   )
 }
