@@ -281,6 +281,17 @@ export default disabled()
           if (!sameDir(next, dir())) queueMicrotask(() => switchDir(next))
         }
 
+        /** 首頁沒有 sessionID，改跟隨預設 location；它也是 Solid signal，換專案會重算。 */
+        const followLocation = () => {
+          let next: string | undefined
+          try {
+            next = context.data.location.default()?.directory
+          } catch {
+            next = undefined
+          }
+          if (next && !sameDir(next, dir())) queueMicrotask(() => switchDir(next))
+        }
+
         const openBoard = () => {
           const current = state()
           if (current.kind === "no-openspec") {
@@ -310,7 +321,10 @@ export default disabled()
 
         context.ui.slot({
           append: "home.footer.status",
-          render: () => <Footer text={() => formatFooter(state())} onOpen={openBoard} />,
+          render: () => {
+            followLocation()
+            return <Footer text={() => formatFooter(state())} onOpen={openBoard} />
+          },
         })
 
         context.ui.slot({
