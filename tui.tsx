@@ -74,6 +74,8 @@ function Board(props: {
   const [index, setIndex] = createSignal(0)
 
   props.follow(props.panel.sessionID)
+  // 面板沒拿到焦點時 j/k 會被打字區吃掉，開面板就先搶回來
+  props.panel.focus()
 
   const changes = (): Change[] => {
     const current = props.state()
@@ -129,7 +131,10 @@ function Board(props: {
         message: `${current.name}：${current.total} 個任務全部執行？`,
         label: { confirm: "開始", cancel: "取消" },
       })
-      if (!confirmed) return
+      if (!confirmed) {
+        props.panel.focus()
+        return
+      }
     }
 
     await send(scope, current)
@@ -144,6 +149,7 @@ function Board(props: {
       return
     }
     await context.ui.dialog.alert({ title: `${current.name} · ${current.next.id}`, message: current.next.title })
+    props.panel.focus()
   }
 
   const archive = async () => {
