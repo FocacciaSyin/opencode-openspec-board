@@ -13,13 +13,13 @@
 
 ## 3. 手動重試
 
-- [ ] 3.1 `/opsx` 在 `no-openspec` / `unresolved` 時先 `forget` 再 `boot`，成功開面板、失敗維持原本提示；以手動操作驗證（無 `openspec/` 時執行顯示提示，建立後再執行可開面板）
+- [x] 3.1 `/opsx` 在 `no-openspec` / `unresolved` 時先 `forget` 再 `boot`，成功開面板、失敗維持原本提示；以手動操作驗證（無 `openspec/` 時執行顯示提示，建立後再執行可開面板）
 
 ## 4. 整合與文件
 
 - [x] 4.1 README 補上「TUI 開著時才執行 `openspec init` 也會自動出現」與 `/opsx` 可重新偵測；確認文字與實際行為一致
 - [x] 4.2 `npm test` 與 `npm run typecheck` 全數通過
-- [ ] 4.3 手動整合驗證：在沒有 `openspec/` 的專案開 TUI，再執行 `openspec init`，footer 應自動出現且不需重啟
+- [x] 4.3 手動整合驗證：在沒有 `openspec/` 的專案開 TUI，執行 `openspec init` 後 `/opsx` 提示由「沒有 OpenSpec」變成「沒有進行中的 change」，再建立 change 後 footer 自動出現，全程不需重啟
 
 ## Workflow follow-up
 
