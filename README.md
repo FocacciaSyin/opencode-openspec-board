@@ -38,13 +38,13 @@ opencode plugin update
 | 操作 | 行為 |
 | --- | --- |
 | `/opsx` | 開啟任務面板 |
-| `j` / `k` | 移動反白 |
+| `j` / `k` / `↑` / `↓` | 移動反白 |
 | `v` | 顯示下一個任務的完整內文 |
 | `n` | 只做下一個：以 `openspec-apply-change` skill 送出 `<change> 只做 <task-id>` |
 | `u` | 更新這張 change 的規劃：以 `openspec-update-change` skill 送出 `<change>`（先確認） |
 | `a` | 整張做完：以 `openspec-apply-change` skill 送出 `<change>`（先確認） |
 | `x` | 封存已完成的 change：以 `openspec-archive-change` skill 送出 `<change>`（先確認） |
-| `q` | 關閉面板 |
+| `q` / `Esc` | 關閉面板 |
 
 footer 與面板都直接讀 `openspec/changes/*/tasks.md`，檔案變更後會自動更新，不需要重開。點擊 footer 也能開啟面板。
 

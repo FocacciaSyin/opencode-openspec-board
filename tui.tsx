@@ -207,12 +207,12 @@ function Board(props: {
   }
 
   context.keymap.layer(() => ({
-    mode: "global",
+    mode: "base",
     priority: 20,
     commands: [
       {
         id: "openspec-board.up",
-        bind: "k",
+        bind: "k,up",
         enabled: () => changes().length > 0,
         run: () => {
           setIndex((value) => stepIndex(value, -1, changes().length))
@@ -220,7 +220,7 @@ function Board(props: {
       },
       {
         id: "openspec-board.down",
-        bind: "j",
+        bind: "j,down",
         enabled: () => changes().length > 0,
         run: () => {
           setIndex((value) => stepIndex(value, 1, changes().length))
@@ -235,7 +235,7 @@ function Board(props: {
       },
       { id: "openspec-board.all-tasks", bind: "a", run: () => void apply("all") },
       { id: "openspec-board.archive", bind: "x", run: () => void archive() },
-      { id: "openspec-board.close", bind: "q", run: () => props.panel.close() },
+      { id: "openspec-board.close", bind: "q,escape", run: () => props.panel.close() },
     ],
     bindings: [
       "openspec-board.up",
@@ -267,7 +267,7 @@ function Board(props: {
       </For>
       {line("─".repeat(width()), "#5a5f7a")}
       {line("   v 全文   n 下一個   u 更新   a 整張   x 封存", "#8a8a8a")}
-      {line("   j/k 移動   q 關閉", "#8a8a8a")}
+      {line("   j/k ↑↓ 移動   q/Esc 關閉", "#8a8a8a")}
     </box>
   )
 }
