@@ -86,10 +86,10 @@ describe("loadBoard", () => {
     assert.equal(scopedArgs(alpha!), "alpha 只做 1.1")
 
     const beta = state.changes.find((item) => item.name === "beta")
-    assert.equal(emptyLabel(beta!), "已完成，可 /opsx-archive")
+    assert.equal(emptyLabel(beta!), "已完成，按 x 封存")
 
     const draft = state.changes.find((item) => item.name === "draft")
-    assert.equal(emptyLabel(draft!), "尚無任務，跑 /opsx-propose")
+    assert.equal(emptyLabel(draft!), "尚無任務，用 openspec-propose")
   })
 })
 

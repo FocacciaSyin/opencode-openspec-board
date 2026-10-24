@@ -247,8 +247,8 @@ export function formatFooter(state: BoardState): string | undefined {
 
 /** 單張 change 沒有 next 時要顯示的文案。 */
 export function emptyLabel(change: Change): string | undefined {
-  if (change.total === 0) return "尚無任務，跑 /opsx-propose"
-  if (change.done === change.total) return "已完成，可 /opsx-archive"
+  if (change.total === 0) return "尚無任務，用 openspec-propose"
+  if (change.done === change.total) return "已完成，按 x 封存"
   return undefined
 }
 
