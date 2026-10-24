@@ -61,6 +61,11 @@ function Footer(props: { text: () => string | undefined; onOpen: () => void }) {
   const subdued = () => context.theme.text.subdued
   const accent = () => context.theme.text.feedback.info.default
 
+  const theme = context.theme as any
+  trace(`theme keys=${JSON.stringify(Object.keys(theme ?? {}))}`)
+  trace(`text keys=${JSON.stringify(Object.keys(theme?.text ?? {}))}`)
+  trace(`text.default=${String(theme?.text?.default)}`)
+
   createEffect(() => trace(`hover=${hover()} base=${String(subdued())} accent=${String(accent())}`))
 
   return (
