@@ -127,6 +127,17 @@ function Board(props: {
     await send(scope, current)
   }
 
+  /** v：顯示目前 change 下一個任務的完整內文。 */
+  const detail = async () => {
+    const current = selected()
+    if (!current) return
+    if (!current.next) {
+      toast(emptyLabel(current) ?? "沒有未完成任務", "info")
+      return
+    }
+    await context.ui.dialog.alert({ title: `${current.name} · ${current.next.id}`, message: current.next.title })
+  }
+
   const archive = async () => {
     const current = selected()
     if (!current) return
@@ -170,6 +181,7 @@ function Board(props: {
         },
       },
       { id: "openspec-board.next-task", bind: "n", run: () => void apply("next") },
+      { id: "openspec-board.detail", bind: "v", run: () => void detail() },
       { id: "openspec-board.all-tasks", bind: "a", run: () => void apply("all") },
       { id: "openspec-board.archive", bind: "x", run: () => void archive() },
       { id: "openspec-board.close", bind: "q", run: () => props.panel.close() },
@@ -178,6 +190,7 @@ function Board(props: {
       "openspec-board.up",
       "openspec-board.down",
       "openspec-board.next-task",
+      "openspec-board.detail",
       "openspec-board.all-tasks",
       "openspec-board.archive",
       "openspec-board.close",
@@ -201,7 +214,7 @@ function Board(props: {
         )}
       </For>
       {line("─".repeat(width()), "#5a5f7a")}
-      {line("   j/k 移動   n 做 next   a 整張   x 封存   q 關閉", "#8a8a8a")}
+      {line("   j/k 移動   v 全文   n 做 next   a 整張   x 封存   q 關閉", "#8a8a8a")}
     </box>
   )
 }

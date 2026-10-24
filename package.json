@@ -1,6 +1,6 @@
 {
   "name": "opencode-openspec-board",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenCode TUI plugin: OpenSpec progress in the footer and a task board that can start apply or archive",
   "type": "module",
   "exports": {
