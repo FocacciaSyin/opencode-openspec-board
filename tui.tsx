@@ -48,12 +48,14 @@ function fit(value: string, width: number): string {
 function Footer(props: { text: () => string | undefined; onOpen: () => void }) {
   const context = usePlugin()
   const [hover, setHover] = createSignal(false)
+  const subdued = () => context.theme.text.subdued
+  const accent = () => context.theme.text.feedback.info.default
 
   return (
     <Show when={props.text()}>
       {(line) => (
         <text
-          fg={hover() ? (context.theme.text.link?.default ?? "#7aa2f7") : undefined}
+          fg={hover() ? accent() : subdued()}
           onMouseOver={() => setHover(true)}
           onMouseOut={() => setHover(false)}
           onMouseDown={props.onOpen}
