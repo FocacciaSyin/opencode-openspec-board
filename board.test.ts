@@ -13,6 +13,7 @@ import {
   parseTasks,
   resolveRoot,
   scopedArgs,
+  stepIndex,
   watchBoard,
   type Change,
 } from "./board.ts"
@@ -181,6 +182,19 @@ describe("createRootResolver", () => {
 
     pending.get("/slow")!(JSON.stringify({ root: { path: "/slow" } }))
     assert.equal(await first, undefined)
+  })
+})
+
+describe("stepIndex", () => {
+  test("wraps in both directions", () => {
+    assert.equal(stepIndex(0, 1, 3), 1)
+    assert.equal(stepIndex(2, 1, 3), 0)
+    assert.equal(stepIndex(0, -1, 3), 2)
+    assert.equal(stepIndex(1, -1, 3), 0)
+  })
+
+  test("stays at zero without changes", () => {
+    assert.equal(stepIndex(5, 1, 0), 0)
   })
 })
 

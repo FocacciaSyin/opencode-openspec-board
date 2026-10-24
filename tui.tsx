@@ -14,6 +14,7 @@ import {
   loadBoard,
   watchBoard,
   watchConfig,
+  stepIndex,
   type BoardState,
   type Change,
 } from "./board.ts"
@@ -203,7 +204,7 @@ function Board(props: {
         bind: "k",
         enabled: () => changes().length > 0,
         run: () => {
-          setIndex((value) => Math.max(0, value - 1))
+          setIndex((value) => stepIndex(value, -1, changes().length))
         },
       },
       {
@@ -211,7 +212,7 @@ function Board(props: {
         bind: "j",
         enabled: () => changes().length > 0,
         run: () => {
-          setIndex((value) => Math.min(changes().length - 1, value + 1))
+          setIndex((value) => stepIndex(value, 1, changes().length))
         },
       },
       { id: "openspec-board.next-task", bind: "n", run: () => void apply("next") },

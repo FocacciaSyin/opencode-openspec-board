@@ -256,6 +256,11 @@ export function scopedArgs(change: Change): string | undefined {
   return change.next ? `${change.name} 只做 ${change.next.id}` : undefined
 }
 
+export function stepIndex(current: number, delta: number, count: number): number {
+  if (count <= 0) return 0
+  return (current + delta + count) % count
+}
+
 export type DispatchOptions = {
   change: Change
   scope: "next" | "all" | "archive"
