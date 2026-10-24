@@ -72,7 +72,7 @@ function Board(props: {
   panel: PanelInput
   state: () => BoardState
   follow: (sessionID?: string) => void
-  refresh: () => void
+  refresh: () => Promise<void>
 }) {
   const context = usePlugin()
   const [index, setIndex] = createSignal(0)
@@ -200,7 +200,15 @@ function Board(props: {
       },
       { id: "openspec-board.next-task", bind: "n", run: () => void apply("next") },
       { id: "openspec-board.detail", bind: "v", run: () => void detail() },
-      { id: "openspec-board.refresh", bind: "u", run: () => props.refresh() },
+      {
+        id: "openspec-board.refresh",
+        bind: "u",
+        run: async () => {
+          toast("更新中…", "info")
+          await props.refresh()
+          toast("已更新", "success")
+        },
+      },
       { id: "openspec-board.all-tasks", bind: "a", run: () => void apply("all") },
       { id: "openspec-board.archive", bind: "x", run: () => void archive() },
       { id: "openspec-board.close", bind: "q", run: () => props.panel.close() },
@@ -282,20 +290,22 @@ export default disabled()
         }
 
         /** u：重新解析並重讀，手動更新用。 */
-        const refresh = () => {
+        const refresh = async () => {
           const target = dir()
           resolver.forget(target)
-          void boot(target)
+          await boot(target)
         }
 
-        const watchDir = (target: string) => {          stopConfig?.()
+        const watchDir = (target: string) => {
+          stopConfig?.()
           stopConfig = watchConfig(target, () => {
             resolver.forget(target)
             void boot(target)
           })
         }
 
-        const switchDir = (next: string) => {          if (!next || sameDir(next, dir())) return
+        const switchDir = (next: string) => {
+          if (!next || sameDir(next, dir())) return
           setDir(next)
           stopWatching()
           setState({ kind: "no-openspec" })
