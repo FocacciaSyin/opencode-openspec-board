@@ -41,7 +41,7 @@ opencode plugin update
 | `j` / `k` | 移動反白 |
 | `v` | 顯示下一個任務的完整內文 |
 | `n` | 只做下一個：`/opsx-apply <change> 只做 <task-id>` |
-| `u` | 重新解析並重讀進度 |
+| `u` | 更新這張 change 的規劃：`/opsx-update <change>`（先確認） |
 | `a` | 整張做完（先確認） |
 | `x` | 封存已完成的 change（先確認） |
 | `q` | 關閉面板 |

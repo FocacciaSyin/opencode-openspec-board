@@ -278,6 +278,20 @@ describe("dispatchApply", () => {
     assert.deepEqual(notes, ["沒有未完成任務"])
   })
 
+  test("sends the update command", async () => {
+    const calls: string[][] = []
+    const ok = await dispatchApply({
+      change: change("alpha", 2),
+      scope: "update",
+      send: async (name, text) => {
+        calls.push([name, text])
+      },
+      notify: () => {},
+    })
+    assert.equal(ok, true)
+    assert.deepEqual(calls, [["opsx-update", "alpha"]])
+  })
+
   test("sends the archive command", async () => {
     const calls: string[][] = []
     const ok = await dispatchApply({

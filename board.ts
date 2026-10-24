@@ -263,14 +263,15 @@ export function stepIndex(current: number, delta: number, count: number): number
 
 export type DispatchOptions = {
   change: Change
-  scope: "next" | "all" | "archive"
+  scope: "next" | "all" | "archive" | "update"
   send: (name: string, text: string) => Promise<void>
   notify: (message: string, variant: "success" | "warning") => void
 }
 
-/** 送出 apply／archive 指令；失敗時退回顯示完整指令字串。 */
+/** 送出 apply／archive／update 指令；失敗時退回顯示完整指令字串。 */
 export async function dispatchApply(options: DispatchOptions): Promise<boolean> {
-  const command = options.scope === "archive" ? "opsx-archive" : "opsx-apply"
+  const command =
+    options.scope === "archive" ? "opsx-archive" : options.scope === "update" ? "opsx-update" : "opsx-apply"
   const text = options.scope === "next" ? scopedArgs(options.change) : options.change.name
   if (!text) {
     options.notify("沒有未完成任務", "warning")

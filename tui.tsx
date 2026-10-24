@@ -72,7 +72,6 @@ function Board(props: {
   panel: PanelInput
   state: () => BoardState
   follow: (sessionID?: string) => void
-  refresh: () => Promise<void>
 }) {
   const context = usePlugin()
   const [index, setIndex] = createSignal(0)
@@ -110,7 +109,7 @@ function Board(props: {
     }
   }
 
-  const send = async (scope: "next" | "all" | "archive", current: Change) => {
+  const send = async (scope: "next" | "all" | "archive" | "update", current: Change) => {
     const sent = await dispatchApply({
       change: current,
       scope,
@@ -154,6 +153,28 @@ function Board(props: {
     }
     await context.ui.dialog.alert({ title: `${current.name} · ${current.next.id}`, message: current.next.title })
     props.panel.focus()
+  }
+
+  /** u：把這張 change 送進 update-change 流程改規劃。 */
+  const update = async () => {
+    const current = selected()
+    if (!current) return
+    if (running()) {
+      toast("執行中，請稍候", "warning")
+      return
+    }
+
+    const confirmed = await context.ui.dialog.confirm({
+      title: "更新這張 change？",
+      message: `${current.name}：重新調整 proposal／specs／design／tasks？`,
+      label: { confirm: "更新", cancel: "取消" },
+    })
+    if (!confirmed) {
+      props.panel.focus()
+      return
+    }
+
+    await send("update", current)
   }
 
   const archive = async () => {
@@ -201,13 +222,9 @@ function Board(props: {
       { id: "openspec-board.next-task", bind: "n", run: () => void apply("next") },
       { id: "openspec-board.detail", bind: "v", run: () => void detail() },
       {
-        id: "openspec-board.refresh",
+        id: "openspec-board.update",
         bind: "u",
-        run: async () => {
-          toast("更新中…", "info")
-          await props.refresh()
-          toast("已更新", "success")
-        },
+        run: () => void update(),
       },
       { id: "openspec-board.all-tasks", bind: "a", run: () => void apply("all") },
       { id: "openspec-board.archive", bind: "x", run: () => void archive() },
@@ -218,7 +235,7 @@ function Board(props: {
       "openspec-board.down",
       "openspec-board.next-task",
       "openspec-board.detail",
-      "openspec-board.refresh",
+      "openspec-board.update",
       "openspec-board.all-tasks",
       "openspec-board.archive",
       "openspec-board.close",
@@ -287,13 +304,6 @@ export default disabled()
           stopChanges = watchBoard(root.path, () => {
             if (sameDir(target, dir())) setState(loadBoard(root.path))
           })
-        }
-
-        /** u：重新解析並重讀，手動更新用。 */
-        const refresh = async () => {
-          const target = dir()
-          resolver.forget(target)
-          await boot(target)
         }
 
         const watchDir = (target: string) => {
@@ -380,7 +390,7 @@ export default disabled()
           append: "session.panel",
           render: (panel) => (
             <Show when={panel.name === PANEL_NAME}>
-              <Board panel={panel} state={state} follow={follow} refresh={refresh} />
+              <Board panel={panel} state={state} follow={follow} />
             </Show>
           ),
         })
