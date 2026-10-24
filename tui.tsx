@@ -2,7 +2,8 @@
 import { Plugin, usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
 import { For, Show, createSignal } from "solid-js"
-import { existsSync } from "node:fs"
+import { existsSync, appendFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -20,6 +21,14 @@ import {
 const PLUGIN_ID = "openspec-board"
 const PANEL_NAME = "openspec.board"
 const SLASH_NAME = "opsx"
+const MOUSE_LOG = join(tmpdir(), "openspec-board-mouse.log")
+
+/** 暫時確認 footer 有沒有收到滑鼠事件。 */
+function trace(event: string) {
+  try {
+    appendFileSync(MOUSE_LOG, `${new Date().toISOString()} ${event}\n`)
+  } catch {}
+}
 
 function disabled(): boolean {
   if (process.env.OPENCODE_OPENSPEC_BOARD_DISABLED === "1") return true
@@ -56,9 +65,18 @@ function Footer(props: { text: () => string | undefined; onOpen: () => void }) {
       {(line) => (
         <text
           fg={hover() ? accent() : subdued()}
-          onMouseOver={() => setHover(true)}
-          onMouseOut={() => setHover(false)}
-          onMouseDown={props.onOpen}
+          onMouseOver={() => {
+            trace("over")
+            setHover(true)
+          }}
+          onMouseOut={() => {
+            trace("out")
+            setHover(false)
+          }}
+          onMouseDown={() => {
+            trace("down")
+            props.onOpen()
+          }}
         >
           {line()}
         </text>
