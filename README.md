@@ -18,6 +18,8 @@ opencode plugin add github:FocacciaSyin/opencode-openspec-board
 
 裝完重開 OpenCode TUI（TUI 外掛在啟動時載入），在含 `openspec/` 的專案開 session，footer 應出現 `openspec <完成>/<總數> (<change 數>)`。
 
+TUI 開著時才執行 `openspec init` 也會自動偵測，不需要再重開；`openspec/` 或 `openspec/changes/` 較晚出現都一樣。
+
 固定版本或指定 commit：
 
 ```sh
@@ -37,7 +39,7 @@ opencode plugin update
 
 | 操作 | 行為 |
 | --- | --- |
-| `/opsx` | 開啟任務面板 |
+| `/opsx` | 開啟任務面板；尚未偵測到 OpenSpec 或解析失敗時會先重新偵測一次 |
 | `j` / `k` / `↑` / `↓` | 移動反白 |
 | `v` | 顯示下一個任務的完整內文 |
 | `n` | 只做下一個：以 `openspec-apply-change` skill 送出 `<change> 只做 <task-id>` |

@@ -358,8 +358,14 @@ export default disabled()
           if (next && !sameDir(next, dir())) queueMicrotask(() => switchDir(next))
         }
 
-        const openBoard = () => {
-          const current = state()
+        const openBoard = async () => {
+          let current = state()
+          // 專案可能是外掛啟動後才初始化，或 store 後來才修好；先重問一次再判斷。
+          if (current.kind === "no-openspec" || current.kind === "unresolved") {
+            resolver.forget(dir())
+            await boot(dir())
+            current = state()
+          }
           if (current.kind === "no-openspec") {
             context.ui.toast.show({ message: "這個專案沒有 OpenSpec", variant: "info" })
             return

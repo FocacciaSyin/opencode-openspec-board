@@ -15,6 +15,7 @@ import {
   scopedArgs,
   stepIndex,
   watchBoard,
+  watchConfig,
   type Change,
 } from "./board.ts"
 
@@ -170,6 +171,35 @@ describe("createRootResolver", () => {
     assert.equal(calls, 2)
   })
 
+  test("does not cache a missing root", async () => {
+    let calls = 0
+    const resolver = createRootResolver(async () => {
+      calls += 1
+      return JSON.stringify({ root: null })
+    })
+
+    assert.equal(await resolver.resolve("/missing"), null)
+    assert.equal(await resolver.resolve("/missing"), null)
+    assert.equal(calls, 2, "a missing root must be resolved again")
+  })
+
+  test("does not cache an unresolved store", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "openspec-unresolved-"))
+    mkdirSync(join(dir, "openspec"), { recursive: true })
+
+    let calls = 0
+    const resolver = createRootResolver(async () => {
+      calls += 1
+      return JSON.stringify({ root: null, status: [{ message: "Unknown store 'nope'." }] })
+    })
+
+    const first = await resolver.resolve(dir)
+    assert.ok(first !== null && "unresolved" in first)
+    await resolver.resolve(dir)
+    assert.equal(calls, 2, "an unresolved root must be resolved again")
+    rmSync(dir, { recursive: true, force: true })
+  })
+
   test("a slower earlier request does not win", async () => {
     const pending = new Map<string, (value: string) => void>()
     const resolver = createRootResolver((dir) => new Promise((resolve) => pending.set(dir, resolve)))
@@ -221,6 +251,56 @@ describe("watchBoard", () => {
     await new Promise((resolve) => setTimeout(resolve, 400))
     assert.equal(calls, afterStop, "watcher should stop after dispose")
 
+    rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe("watchConfig", () => {
+  test("notifies when openspec appears after attach", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "openspec-late-config-"))
+    let calls = 0
+    const stop = watchConfig(dir, () => {
+      calls += 1
+    })
+
+    mkdirSync(join(dir, "openspec"), { recursive: true })
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    assert.ok(calls >= 1, "watcher should notice a new openspec directory")
+
+    stop()
+    const afterStop = calls
+    writeFileSync(join(dir, "openspec", "config.yaml"), "schema: spec-driven\n")
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    assert.equal(calls, afterStop, "watcher should stop after dispose")
+
+    rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe("watchBoard late directories", () => {
+  test("re-attaches when the changes directory appears after attach", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "openspec-late-board-"))
+    mkdirSync(join(dir, "openspec"), { recursive: true })
+
+    let calls = 0
+    const stop = watchBoard(dir, () => {
+      calls += 1
+    })
+
+    const changeDir = join(dir, "openspec", "changes", "one")
+    mkdirSync(changeDir, { recursive: true })
+    const file = join(changeDir, "tasks.md")
+    writeFileSync(file, "- [ ] 1.1 a\n")
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    assert.ok(calls >= 1, "watcher should notice a new changes directory")
+    assert.equal(loadBoard(dir).kind, "ready")
+
+    const attached = calls
+    writeFileSync(file, "- [x] 1.1 a\n")
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    assert.ok(calls > attached, "watcher should re-attach to the new changes directory")
+
+    stop()
     rmSync(dir, { recursive: true, force: true })
   })
 })

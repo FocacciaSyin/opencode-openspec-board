@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { existsSync, readdirSync, readFileSync, statSync, watch, type FSWatcher } from "node:fs"
-import { join } from "node:path"
+import { dirname, join, resolve } from "node:path"
 
 export type Task = {
   id: string
@@ -113,7 +113,8 @@ export function createRootResolver(run: ContextRunner = runContext): RootResolve
       const request = ++latest
       const result = await resolveRoot(dir, run)
       if (request !== latest) return undefined
-      cache.set(dir, result)
+      // 否定結果是當下檔案狀態的函式，專案可能接著才初始化，所以不快取。
+      if (result !== null && !("unresolved" in result)) cache.set(dir, result)
       return result
     },
     forget(dir) {
@@ -122,7 +123,58 @@ export function createRootResolver(run: ContextRunner = runContext): RootResolve
   }
 }
 
-/** 只在 config.yaml/config.yml 變動時通知，避免 tasks.md 的勾選也觸發重新解析。 */
+/**
+ * 綁定 fs.watch：目標不存在時退到最近存在的上層目錄，目標出現後才改成遞迴監看目標。
+ * 只在綁定路徑改變時重綁，避免每次存檔都重建 watcher。
+ * shortcut: 被監看的目錄本身被刪除時 Windows 的 fs.watch 不一定發事件，等真的回報再處理。
+ */
+function watchNearest(target: string, onChange: () => void): () => void {
+  let watcher: FSWatcher | undefined
+  let bound = ""
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const nearest = (path: string): string | undefined => {
+    let current = resolve(path)
+    for (;;) {
+      if (existsSync(current)) return current
+      const parent = dirname(current)
+      if (parent === current) return undefined
+      current = parent
+    }
+  }
+
+  const bind = () => {
+    const next = nearest(target) ?? ""
+    if (next === bound) return
+    watcher?.close()
+    watcher = undefined
+    bound = next
+    if (!next) return
+    try {
+      watcher = watch(next, { recursive: next === resolve(target) }, () => {
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(() => {
+          timer = undefined
+          bind()
+          onChange()
+        }, 150)
+      })
+      watcher.on("error", () => {})
+    } catch {
+      watcher = undefined
+      bound = ""
+    }
+  }
+
+  bind()
+
+  return () => {
+    if (timer) clearTimeout(timer)
+    watcher?.close()
+  }
+}
+
+/** 只在 config.yaml/config.yml 或 openspec/ 本身出現／消失時通知，避免 tasks.md 的勾選也觸發重新解析。 */
 export function watchConfig(dir: string, onChange: () => void): () => void {
   const configDir = join(dir, "openspec")
   const stampOf = () => {
@@ -131,58 +183,21 @@ export function watchConfig(dir: string, onChange: () => void): () => void {
         return String(statSync(join(configDir, name)).mtimeMs)
       } catch {}
     }
-    return ""
+    return existsSync(configDir) ? "dir" : ""
   }
 
   let stamp = stampOf()
-  let watcher: FSWatcher | undefined
-  let timer: ReturnType<typeof setTimeout> | undefined
-
-  try {
-    watcher = watch(configDir, { recursive: true }, () => {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => {
-        timer = undefined
-        const next = stampOf()
-        if (next === stamp) return
-        stamp = next
-        onChange()
-      }, 150)
-    })
-    watcher.on("error", () => {})
-  } catch {
-    watcher = undefined
-  }
-
-  return () => {
-    if (timer) clearTimeout(timer)
-    watcher?.close()
-  }
+  return watchNearest(configDir, () => {
+    const next = stampOf()
+    if (next === stamp) return
+    stamp = next
+    onChange()
+  })
 }
 
-/** 監看 changes 目錄，150ms debounce；回傳卸載函式。 */
+/** 監看 changes 目錄，150ms debounce；目錄後建也會接上。回傳卸載函式。 */
 export function watchBoard(dir: string, onChange: () => void): () => void {
-  const target = join(dir, "openspec", "changes")
-  let watcher: FSWatcher | undefined
-  let timer: ReturnType<typeof setTimeout> | undefined
-
-  try {
-    watcher = watch(target, { recursive: true }, () => {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => {
-        timer = undefined
-        onChange()
-      }, 150)
-    })
-    watcher.on("error", () => {})
-  } catch {
-    watcher = undefined
-  }
-
-  return () => {
-    if (timer) clearTimeout(timer)
-    watcher?.close()
-  }
+  return watchNearest(join(dir, "openspec", "changes"), onChange)
 }
 
 export function loadBoard(dir: string): BoardState {
