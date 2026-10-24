@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { Plugin, usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
-import { For, Show, createSignal } from "solid-js"
+import { For, Show, createEffect, createSignal } from "solid-js"
 import { existsSync, appendFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -60,6 +60,8 @@ function Footer(props: { text: () => string | undefined; onOpen: () => void }) {
   const [hover, setHover] = createSignal(false)
   const subdued = () => context.theme.text.subdued
   const accent = () => context.theme.text.feedback.info.default
+
+  createEffect(() => trace(`hover=${hover()} base=${String(subdued())} accent=${String(accent())}`))
 
   return (
     <Show when={props.text()}>
