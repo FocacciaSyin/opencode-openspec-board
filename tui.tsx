@@ -46,10 +46,18 @@ function fit(value: string, width: number): string {
 }
 
 function Footer(props: { text: () => string | undefined; onOpen: () => void }) {
+  const context = usePlugin()
+  const [hover, setHover] = createSignal(false)
+
   return (
     <Show when={props.text()}>
       {(line) => (
-        <text onMouseDown={props.onOpen}>
+        <text
+          fg={hover() ? (context.theme.text.link?.default ?? "#7aa2f7") : undefined}
+          onMouseOver={() => setHover(true)}
+          onMouseOut={() => setHover(false)}
+          onMouseDown={props.onOpen}
+        >
           {line()}
         </text>
       )}
