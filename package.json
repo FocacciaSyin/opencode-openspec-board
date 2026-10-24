@@ -1,0 +1,39 @@
+{
+  "name": "opencode-openspec-board",
+  "version": "0.1.0",
+  "description": "OpenCode TUI plugin: OpenSpec progress in the footer and a task board that can start apply or archive",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./tui": "./tui.tsx"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FocacciaSyin/opencode-openspec-board.git"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "openspec",
+    "tui"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test board.test.ts"
+  },
+  "dependencies": {
+    "@opencode/plugin": "^2.0.18"
+  },
+  "peerDependencies": {
+    "@opentui/core": ">=0.6.6",
+    "@opentui/solid": ">=0.6.6",
+    "solid-js": ">=1.9.0"
+  },
+  "devDependencies": {
+    "@opentui/core": "0.6.8",
+    "@opentui/solid": "0.6.8",
+    "@types/node": "^26.6.3",
+    "solid-js": "1.9.12",
+    "typescript": "5.9.3"
+  }
+}
