@@ -11,12 +11,15 @@ import {
   loadBoard,
   parseContext,
   parseTasks,
+  previewTasks,
+  retainExpanded,
   resolveRoot,
   scopedArgs,
   stepIndex,
   watchBoard,
   watchConfig,
   type Change,
+  type BoardState,
 } from "./board.ts"
 
 function change(name: string, total: number, done = 0): Change {
@@ -62,7 +65,7 @@ describe("loadBoard", () => {
     assert.equal(loadBoard(dir).kind, "no-changes")
   })
 
-  // 同一份資料須保留所有任務供 GUI 顯示，且不改變 TUI 的統計與下一項。
+  // 同次讀取保留所有任務的順序與完成狀態供 TUI／GUI 顯示，且不改變進度、下一項與封存排除行為。
   test("counts tasks, finds next and skips archive", () => {
     const dir = join(root, "project")
     const changes = join(dir, "openspec", "changes")
@@ -85,17 +88,79 @@ describe("loadBoard", () => {
     assert.equal(alpha?.done, 1)
     assert.equal(alpha?.total, 3)
     assert.equal(alpha?.next?.id, "1.1")
-    assert.deepEqual(alpha?.tasks.map((task) => [task.id, task.done]), [["1.1", false], ["1.2", true], ["1.3", false]])
     assert.equal(scopedArgs(alpha!), "alpha 只做 1.1")
+    assert.deepEqual(alpha?.tasks, [
+      { id: "1.1", title: "a", done: false },
+      { id: "1.2", title: "b", done: true },
+      { id: "1.3", title: "c", done: false },
+    ])
 
     const beta = state.changes.find((item) => item.name === "beta")
     assert.equal(emptyLabel(beta!), "已完成，按 x 封存")
+    assert.deepEqual(beta?.tasks, [{ id: "2.1", title: "done", done: true }])
     // RPC 在 JSON 編碼前驗證，不能保留 next: undefined。
     assert.equal(Object.hasOwn(beta!, "next"), false)
 
     const draft = state.changes.find((item) => item.name === "draft")
     assert.equal(emptyLabel(draft!), "尚無任務，用 openspec-propose")
+    assert.deepEqual(draft?.tasks, [])
     assert.equal(Object.hasOwn(draft!, "next"), false)
+  })
+})
+
+describe("board tasks", () => {
+  // 預覽依原始順序取前三個，已完成任務與長標題不被篩除或截斷。
+  test("previews the first three tasks including completed tasks", () => {
+    const item = change("alpha", 5, 2)
+    item.tasks[0].title = "很長的中文任務與 C:/very/long/path/without/spaces ".repeat(10)
+    const original = structuredClone(item)
+    assert.deepEqual(previewTasks(item, false), item.tasks.slice(0, 3))
+    assert.deepEqual(previewTasks(item, false).map((task) => task.done), [true, true, false])
+    assert.deepEqual(previewTasks(item, true), item.tasks)
+    assert.deepEqual(item, original)
+  })
+
+  // 零至三項不遺漏，四項以上只限制預覽數；全部完成仍能展開閱讀。
+  test("previews zero to five tasks even when all are completed", () => {
+    for (let total = 0; total <= 5; total++) {
+      const item = change("alpha", total, total)
+      assert.equal(previewTasks(item, false).length, Math.min(3, total))
+      assert.deepEqual(previewTasks(item, true), item.tasks)
+      assert.equal(item.total - previewTasks(item, false).length, Math.max(0, total - 3))
+    }
+  })
+
+  const ready = (...changes: Change[]): BoardState => ({ kind: "ready", changes, done: 0, total: 0 })
+
+  // 每張 change 狀態獨立，重新讀取、排序與縮減任務不改變仍存在的展開意圖。
+  test("retains expansion by name across reloads reorder and task count changes", () => {
+    const expanded = new Set(["alpha"])
+    const reloaded = retainExpanded(expanded, ready(change("beta", 5), change("alpha", 2)))
+    assert.deepEqual([...reloaded], ["alpha"])
+    assert.equal(reloaded.has("beta"), false)
+    assert.deepEqual([...retainExpanded(reloaded, ready(change("alpha", 6), change("beta", 5)))], ["alpha"])
+    assert.deepEqual([...expanded], ["alpha"])
+  })
+
+  // 封存／刪除立即清理，重新建立同名 change 時不能帶回舊狀態。
+  test("forgets removed changes before a same-name change is recreated", () => {
+    const remaining = retainExpanded(new Set(["alpha", "beta"]), ready(change("beta", 5)))
+    assert.deepEqual([...remaining], ["beta"])
+    assert.deepEqual([...retainExpanded(remaining, ready(change("alpha", 5), change("beta", 5)))], ["beta"])
+  })
+
+  // 專案切換先清空 state；所有非 ready 狀態均重設，避免跨專案同名 change 混用。
+  test("resets expansion when project state is cleared or unavailable", () => {
+    const states: BoardState[] = [
+      { kind: "no-openspec" },
+      { kind: "no-changes" },
+      { kind: "unresolved", message: "Unknown store" },
+    ]
+    for (const state of states) {
+      const cleared = retainExpanded(new Set(["alpha"]), state)
+      assert.equal(cleared.size, 0)
+      assert.equal(retainExpanded(cleared, ready(change("alpha", 5))).size, 0)
+    }
   })
 })
 
@@ -143,19 +208,39 @@ describe("parseContext", () => {
     assert.equal(parseContext(dir, JSON.stringify({ root: null, status: [{ message: "none" }] })), null)
   })
 
-  test("invalid json stays hidden", () => {
-    assert.equal(parseContext(project("broken-json", true), "not json"), null)
+  // 已有 OpenSpec 的專案遇到無效輸出時，必須顯示偵測失敗，不得誤報專案不存在。
+  test("invalid JSON in an OpenSpec project reports a detection failure", () => {
+    assert.deepEqual(parseContext(project("broken-json", true), "not json"), {
+      unresolved: "OpenSpec context 回傳無效的 JSON",
+    })
+  })
+
+  // 真正沒有 OpenSpec 的一般目錄，仍不因 CLI 輸出異常顯示提示。
+  test("invalid JSON without an OpenSpec directory stays hidden", () => {
+    assert.equal(parseContext(project("plain-broken-json", false), "not json"), null)
   })
 })
 
 describe("resolveRoot", () => {
-  test("runner failure stays hidden", async () => {
-    assert.equal(
-      await resolveRoot(process.cwd(), async () => {
-        throw new Error("missing")
-      }),
-      null,
-    )
+  let root = ""
+  before(() => { root = mkdtempSync(join(tmpdir(), "openspec-runner-")) })
+  after(() => { rmSync(root, { recursive: true, force: true }) })
+
+  // CLI 不可用時，非 OpenSpec 專案仍保持隱藏。
+  test("runner failure stays hidden without an OpenSpec directory", async () => {
+    assert.equal(await resolveRoot(root, async () => { throw new Error("missing") }), null)
+  })
+
+  // 真實逾時與找不到 CLI 都會拒絕 Promise；已有 OpenSpec 時兩者都必須顯示失敗。
+  test("runner failure reports unresolved for an existing OpenSpec project", async () => {
+    const dir = join(root, "project")
+    mkdirSync(join(dir, "openspec"), { recursive: true })
+    const failures = [new Error("spawn openspec ENOENT"), Object.assign(new Error("Command failed"), { killed: true, signal: "SIGTERM" })]
+    for (const failure of failures) {
+      assert.deepEqual(await resolveRoot(dir, async () => { throw failure }), {
+        unresolved: "OpenSpec root 偵測失敗，請確認 openspec context --json 可正常執行",
+      })
+    }
   })
 })
 

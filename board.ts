@@ -53,7 +53,7 @@ export function parseContext(dir: string, stdout: string): ResolvedRoot {
   try {
     payload = JSON.parse(stdout)
   } catch {
-    return null
+    return hasOpenSpec(dir) ? { unresolved: "OpenSpec context 回傳無效的 JSON" } : null
   }
 
   const data = payload as {
@@ -75,7 +75,8 @@ export function parseContext(dir: string, stdout: string): ResolvedRoot {
 }
 
 /** 預設 runner；Windows 的 openspec 是 .cmd，必須經 shell。root: null 也是 exit 1，所以看 stdout 不看 exit code。 */
-export function runContext(dir: string, timeout = 5000): Promise<string> {
+// CLI 冷啟動可能超過五秒，不能把正常但較慢的 root 偵測提早終止。
+export function runContext(dir: string, timeout = 30000): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       "openspec",
@@ -93,7 +94,9 @@ export async function resolveRoot(dir: string, run: ContextRunner = runContext):
   try {
     return parseContext(dir, await run(dir))
   } catch {
-    return null
+    return hasOpenSpec(dir)
+      ? { unresolved: "OpenSpec root 偵測失敗，請確認 openspec context --json 可正常執行" }
+      : null
   }
 }
 
@@ -313,6 +316,16 @@ export function formatFooter(state: BoardState): string | undefined {
   if (state.kind === "unresolved") return "openspec ?"
   if (state.kind !== "ready") return undefined
   return `openspec ${state.done}/${state.total} (${state.changes.length})`
+}
+
+export function previewTasks(change: Change, expanded: boolean): Task[] {
+  return expanded ? change.tasks : change.tasks.slice(0, 3)
+}
+
+/** 存檔保留仍存在的 change；清空專案狀態時一併重設展開清單。 */
+export function retainExpanded(expanded: ReadonlySet<string>, state: BoardState): Set<string> {
+  const names = new Set(state.kind === "ready" ? state.changes.map((change) => change.name) : [])
+  return new Set([...expanded].filter((name) => names.has(name)))
 }
 
 /** 單張 change 沒有 next 時要顯示的文案。 */

@@ -1,7 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import { Plugin, usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
-import { For, Show, createSignal } from "solid-js"
+import type { ScrollBoxRenderable } from "@opentui/core"
+import { For, Show, createEffect, createSignal } from "solid-js"
 import { existsSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -11,6 +12,8 @@ import {
   emptyLabel,
   formatFooter,
   loadBoard,
+  previewTasks,
+  retainExpanded,
   watchBoard,
   watchConfig,
   stepIndex,
@@ -72,11 +75,14 @@ function Board(props: {
   panel: PanelInput
   state: () => BoardState
   follow: (sessionID?: string) => void
+  expanded: () => ReadonlySet<string>
+  toggle: (name: string) => void
 }) {
   const context = usePlugin()
   const [index, setIndex] = createSignal(0)
+  let list: ScrollBoxRenderable | undefined
 
-  props.follow(props.panel.sessionID)
+  createEffect(() => props.follow(props.panel.sessionID))
   // 面板沒拿到焦點時 j/k 會被打字區吃掉，開面板就先搶回來
   props.panel.focus()
 
@@ -84,13 +90,34 @@ function Board(props: {
     const current = props.state()
     return current.kind === "ready" ? current.changes : []
   }
-  const selected = () => changes()[Math.min(index(), Math.max(0, changes().length - 1))]
+  const selectedIndex = () => Math.min(index(), Math.max(0, changes().length - 1))
+  const selected = () => changes()[selectedIndex()]
+  let revealPending = false
+  const revealAfterLayout = () => {
+    if (!revealPending) return
+    revealPending = false
+    const current = selected()
+    if (current && list && !list.isDestroyed) list.scrollChildIntoView(`openspec-header-${current.name}`)
+  }
+  const revealSelected = () => {
+    const current = selected()
+    if (!current || revealPending) return
+    // 繪製前已有本次排版座標，不依賴可能略過的 frame 完成事件。
+    revealPending = true
+    context.renderer.requestRender()
+  }
+  createEffect(() => { props.expanded(); revealSelected() })
   const width = () => Math.max(24, props.panel.width - 4)
-  const clean = (value: string) => value.replace(/`/g, "").replace(/\*\*/g, "").split(/[；;]\s*驗證/)[0].trim()
   const line = (text: string, fg?: string) => <text fg={fg} wrapMode="none" truncate>{fit(text, width())}</text>
   const totals = () => {
     const current = props.state()
     return current.kind === "ready" ? `${current.done}/${current.total}` : ""
+  }
+  const message = () => {
+    const current = props.state()
+    return current.kind === "unresolved" ? current.message
+      : current.kind === "no-changes" ? "目前沒有進行中的 change"
+      : current.kind === "no-openspec" ? "尚無可顯示的 OpenSpec 任務" : undefined
   }
   const headerLine = (item: Change, active: boolean) => {
     const progress = `${item.done}/${item.total}`
@@ -215,7 +242,7 @@ function Board(props: {
         bind: "k,up",
         enabled: () => changes().length > 0,
         run: () => {
-          setIndex((value) => stepIndex(value, -1, changes().length))
+          setIndex(stepIndex(selectedIndex(), -1, changes().length))
         },
       },
       {
@@ -223,8 +250,14 @@ function Board(props: {
         bind: "j,down",
         enabled: () => changes().length > 0,
         run: () => {
-          setIndex((value) => stepIndex(value, 1, changes().length))
+          setIndex(stepIndex(selectedIndex(), 1, changes().length))
         },
+      },
+      {
+        id: "openspec-board.toggle-tasks",
+        bind: "return",
+        enabled: () => (selected()?.total ?? 0) > 3,
+        run: () => { const current = selected(); if (current) props.toggle(current.name) },
       },
       { id: "openspec-board.next-task", bind: "n", run: () => void apply("next") },
       { id: "openspec-board.detail", bind: "v", run: () => void detail() },
@@ -240,6 +273,7 @@ function Board(props: {
     bindings: [
       "openspec-board.up",
       "openspec-board.down",
+      "openspec-board.toggle-tasks",
       "openspec-board.next-task",
       "openspec-board.detail",
       "openspec-board.update",
@@ -250,24 +284,63 @@ function Board(props: {
   }))
 
   return (
-    <box flexDirection="column">
-      {line(`OpenSpec   ${changes().length} active · ${totals()}`)}
-      {line("─".repeat(width()), "#5a5f7a")}
-      <For each={changes()}>
-        {(item, position) => (
-          <box flexDirection="column">
-            {line(headerLine(item, position() === index()), position() === index() ? "#7aa2f7" : undefined)}
-            {line(
-              `  ${item.next ? `next  ${item.next.id} ${clean(item.next.title)}` : (emptyLabel(item) ?? "")}`,
-              "#8a8a8a",
-            )}
-            {position() < changes().length - 1 ? line(" ") : null}
-          </box>
-        )}
-      </For>
-      {line("─".repeat(width()), "#5a5f7a")}
-      {line("   v 全文   n 下一個   u 更新   a 整張   x 封存", "#8a8a8a")}
-      {line("   j/k ↑↓ 移動   q/Esc 關閉", "#8a8a8a")}
+    <box flexDirection="column" width="100%" height="100%" minHeight={0}>
+      <box flexDirection="column" flexShrink={0}>
+        {line(`OpenSpec Tasks   ${changes().length} active · ${totals()}`)}
+        {line("─".repeat(width()), "#5a5f7a")}
+      </box>
+      {/* shortcut: 停用離屏裁切以更新標題座標；大量任務造成延遲時改用離屏排版座標定位。 */}
+      <scrollbox
+        ref={(value) => { list = value }}
+        flexGrow={1} flexShrink={1} minHeight={0} scrollX={false}
+        viewportCulling={false}
+        contentOptions={{ flexDirection: "column" }}
+        onSizeChange={revealSelected}
+        renderBefore={revealAfterLayout}
+      >
+        <Show when={message()}>{(text) => <text fg={context.theme.text.muted} wrapMode="word">{text()}</text>}</Show>
+        <For each={changes()}>
+          {(item, position) => (
+            <box id={`openspec-change-${item.name}`} flexDirection="column" flexShrink={0} width="100%">
+              <box id={`openspec-header-${item.name}`} height={1} flexShrink={0} onMouseDown={() => { setIndex(position()); props.panel.focus() }}>
+                {line(headerLine(item, position() === selectedIndex()), position() === selectedIndex() ? "#7aa2f7" : undefined)}
+              </box>
+              <Show when={item.total === 0}>
+                <text fg={context.theme.text.muted}>  尚無任務</text>
+              </Show>
+              <Show when={item.total > 0 && item.done === item.total}>
+                <text fg={context.theme.text.muted}>  已完成</text>
+              </Show>
+              <For each={previewTasks(item, props.expanded().has(item.name))}>
+                {(task) => (
+                  <box flexDirection="row" alignItems="flex-start" flexShrink={0} width="100%">
+                    <text fg={context.theme.text.muted} flexShrink={0}>  {task.done ? "[x]" : "[ ]"} {task.id} </text>
+                    <text
+                      fg={task.done ? context.theme.text.muted : context.theme.text.base}
+                      flexGrow={1} flexShrink={1} minWidth={0} wrapMode="word"
+                    >{task.title}</text>
+                  </box>
+                )}
+              </For>
+              <Show when={item.total > 3}>
+                <text fg={context.theme.text.base} onMouseDown={() => {
+                  setIndex(position())
+                  props.panel.focus()
+                  props.toggle(item.name)
+                }}>
+                  {props.expanded().has(item.name) ? "  收合" : `  展開其餘 ${item.total - 3} 項`}
+                </text>
+              </Show>
+              {position() < changes().length - 1 ? line(" ") : null}
+            </box>
+          )}
+        </For>
+      </scrollbox>
+      <box flexDirection="column" flexShrink={0}>
+        {line("─".repeat(width()), "#5a5f7a")}
+        <text fg={context.theme.text.muted} wrapMode="word">   v 全文   n 下一個   u 更新   a 整張   x 封存</text>
+        <text fg={context.theme.text.muted} wrapMode="word">   Enter 展開/收合   j/k ↑↓ 移動   q/Esc 關閉</text>
+      </box>
     </box>
   )
 }
@@ -280,7 +353,24 @@ export default disabled()
         const baseDir = context.location?.directory ?? process.cwd()
         const [dir, setDir] = createSignal(baseDir)
         const [state, setState] = createSignal<BoardState>({ kind: "no-openspec" })
+        const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set())
         const resolver = createRootResolver()
+
+        const updateState = (next: BoardState) => {
+          setState(next)
+          setExpanded((previous) => retainExpanded(previous, next))
+        }
+
+        const toggleTasks = (name: string) => {
+          const current = state()
+          if (current.kind !== "ready" || !current.changes.some((item) => item.name === name && item.total > 3)) return
+          setExpanded((previous) => {
+            const next = new Set(previous)
+            if (next.has(name)) next.delete(name)
+            else next.add(name)
+            return next
+          })
+        }
 
         let stopChanges: (() => void) | undefined
         let stopConfig: (() => void) | undefined
@@ -297,19 +387,19 @@ export default disabled()
 
           if (root === null) {
             stopWatching()
-            setState({ kind: "no-openspec" })
+            updateState({ kind: "no-openspec" })
             return
           }
           if ("unresolved" in root) {
             stopWatching()
-            setState({ kind: "unresolved", message: root.unresolved })
+            updateState({ kind: "unresolved", message: root.unresolved })
             return
           }
 
-          setState(loadBoard(root.path))
+          updateState(loadBoard(root.path))
           stopWatching()
           stopChanges = watchBoard(root.path, () => {
-            if (sameDir(target, dir())) setState(loadBoard(root.path))
+            if (sameDir(target, dir())) updateState(loadBoard(root.path))
           })
         }
 
@@ -323,9 +413,9 @@ export default disabled()
 
         const switchDir = (next: string) => {
           if (!next || sameDir(next, dir())) return
-          setDir(next)
           stopWatching()
-          setState({ kind: "no-openspec" })
+          updateState({ kind: "no-openspec" })
+          setDir(next)
           watchDir(next)
           void boot(next)
         }
@@ -343,6 +433,8 @@ export default disabled()
         }
 
         const follow = (sessionID?: string) => {
+          const route = context.ui.router.current()
+          if (sessionID && (route.type !== "session" || route.sessionID !== sessionID)) return
           const next = sessionDir(sessionID) ?? baseDir
           if (!sameDir(next, dir())) queueMicrotask(() => switchDir(next))
         }
@@ -356,6 +448,12 @@ export default disabled()
             next = undefined
           }
           if (next && !sameDir(next, dir())) queueMicrotask(() => switchDir(next))
+        }
+
+        const sessionState = (sessionID: string): BoardState => {
+          const route = context.ui.router.current()
+          return route.type === "session" && route.sessionID === sessionID
+            && sameDir(sessionDir(sessionID) ?? baseDir, dir()) ? state() : { kind: "no-openspec" }
         }
 
         const openBoard = async () => {
@@ -386,8 +484,8 @@ export default disabled()
         context.ui.slot({
           append: "prompt.footer.status",
           render: (input) => {
-            follow(input.sessionID)
-            return <Footer text={() => formatFooter(state())} onOpen={openBoard} />
+            createEffect(() => follow(input.sessionID))
+            return <Footer text={() => formatFooter(input.sessionID ? sessionState(input.sessionID) : state())} onOpen={openBoard} />
           },
         })
 
@@ -403,7 +501,7 @@ export default disabled()
           append: "session.panel",
           render: (panel) => (
             <Show when={panel.name === PANEL_NAME}>
-              <Board panel={panel} state={state} follow={follow} />
+              <Board panel={panel} state={() => sessionState(panel.sessionID)} follow={follow} expanded={expanded} toggle={toggleTasks} />
             </Show>
           ),
         })
