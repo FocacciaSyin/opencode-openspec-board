@@ -25,7 +25,7 @@ function change(name: string, total: number, done = 0): Change {
     title: `task ${index + 1}`,
     done: index < done,
   }))
-  return { name, total, done, next: tasks.find((task) => !task.done), mtime: 0 }
+  return { name, tasks, total, done, next: tasks.find((task) => !task.done), mtime: 0 }
 }
 
 describe("parseTasks", () => {
@@ -62,6 +62,7 @@ describe("loadBoard", () => {
     assert.equal(loadBoard(dir).kind, "no-changes")
   })
 
+  // 同一份資料須保留所有任務供 GUI 顯示，且不改變 TUI 的統計與下一項。
   test("counts tasks, finds next and skips archive", () => {
     const dir = join(root, "project")
     const changes = join(dir, "openspec", "changes")
@@ -84,13 +85,17 @@ describe("loadBoard", () => {
     assert.equal(alpha?.done, 1)
     assert.equal(alpha?.total, 3)
     assert.equal(alpha?.next?.id, "1.1")
+    assert.deepEqual(alpha?.tasks.map((task) => [task.id, task.done]), [["1.1", false], ["1.2", true], ["1.3", false]])
     assert.equal(scopedArgs(alpha!), "alpha 只做 1.1")
 
     const beta = state.changes.find((item) => item.name === "beta")
     assert.equal(emptyLabel(beta!), "已完成，按 x 封存")
+    // RPC 在 JSON 編碼前驗證，不能保留 next: undefined。
+    assert.equal(Object.hasOwn(beta!, "next"), false)
 
     const draft = state.changes.find((item) => item.name === "draft")
     assert.equal(emptyLabel(draft!), "尚無任務，用 openspec-propose")
+    assert.equal(Object.hasOwn(draft!, "next"), false)
   })
 })
 

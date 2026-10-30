@@ -10,6 +10,7 @@ export type Task = {
 
 export type Change = {
   name: string
+  tasks: Task[]
   done: number
   total: number
   next?: Task
@@ -74,12 +75,12 @@ export function parseContext(dir: string, stdout: string): ResolvedRoot {
 }
 
 /** 預設 runner；Windows 的 openspec 是 .cmd，必須經 shell。root: null 也是 exit 1，所以看 stdout 不看 exit code。 */
-export function runContext(dir: string): Promise<string> {
+export function runContext(dir: string, timeout = 5000): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       "openspec",
       ["context", "--json"],
-      { cwd: dir, shell: true, timeout: 5000, windowsHide: true },
+      { cwd: dir, shell: true, timeout, windowsHide: true },
       (error, stdout) => {
         if (stdout && stdout.trim().length > 0) resolve(stdout)
         else reject(error ?? new Error("openspec context 沒有輸出"))
@@ -234,11 +235,13 @@ export function loadBoard(dir: string): BoardState {
     }
 
     const done = tasks.filter((task) => task.done).length
+    const next = tasks.find((task) => !task.done)
     changes.push({
       name: entry.name,
+      tasks,
       done,
       total: tasks.length,
-      next: tasks.find((task) => !task.done),
+      ...(next ? { next } : {}),
       mtime,
     })
   }
@@ -251,6 +254,58 @@ export function loadBoard(dir: string): BoardState {
     changes,
     done: changes.reduce((sum, change) => sum + change.done, 0),
     total: changes.reduce((sum, change) => sum + change.total, 0),
+  }
+}
+
+/** GUI 的資料來源綁定單一 location；首次讀取才監看，卸載後不再建立 watcher。 */
+// GUI 初讀會與 server 啟動競爭 I/O，容許 CLI 冷啟動；TUI 保留原本 5 秒上限。
+export function createBoardSource(dir: string, changed: () => void, run: ContextRunner = (target) => runContext(target, 15000)) {
+  const resolver = createRootResolver(run)
+  let state: BoardState = { kind: "no-openspec" }
+  let rootPath: string | undefined
+  let stopConfig: (() => void) | undefined
+  let stopChanges: (() => void) | undefined
+  let revision = 0
+  let disposed = false
+  let latestRead: Promise<BoardState>
+
+  const read = (refresh = false): Promise<BoardState> => {
+    if (disposed) return Promise.resolve(state)
+    stopConfig ??= watchConfig(dir, () => {
+      void read(true).then(() => { if (!disposed) changed() })
+    })
+    if (refresh) resolver.forget(dir)
+    const request = ++revision
+    latestRead = resolver.resolve(dir).then((root): BoardState | Promise<BoardState> => {
+      if (disposed) return state
+      // 多視窗或事件同時讀取時，舊請求須等待新結果，不能回傳過期快取供操作使用。
+      if (request !== revision) return latestRead
+      if (root === undefined) return state
+
+      const nextPath = root && "path" in root ? root.path : undefined
+      if (rootPath !== nextPath) {
+        stopChanges?.()
+        stopChanges = nextPath ? watchBoard(nextPath, changed) : undefined
+        rootPath = nextPath
+      }
+      state = root === null
+        ? { kind: "no-openspec" }
+        : "unresolved" in root
+          ? { kind: "unresolved", message: root.unresolved }
+          : loadBoard(root.path)
+      return state
+    })
+    return latestRead
+  }
+
+  return {
+    read,
+    dispose() {
+      disposed = true
+      revision++
+      stopConfig?.()
+      stopChanges?.()
+    },
   }
 }
 

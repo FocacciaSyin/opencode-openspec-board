@@ -1,12 +1,15 @@
 {
   "name": "opencode-openspec-board",
-  "version": "0.1.4",
-  "description": "OpenCode TUI plugin: OpenSpec progress in the footer and a task board that can start apply or archive",
+  "version": "0.2.0",
+  "description": "OpenCode TUI and Desktop plugin: OpenSpec progress and a task board that can start apply or archive",
   "type": "module",
+  "engines": { "node": ">=26.4.0" },
   "exports": {
     ".": "./index.ts",
-    "./tui": "./tui.tsx"
+    "./tui": "./tui.tsx",
+    "./gui-experimental": "./build/gui.cjs"
   },
+  "files": ["index.ts", "tui.tsx", "board.ts", "rpc.ts", "build/gui.cjs"],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/FocacciaSyin/opencode-openspec-board.git"
@@ -19,12 +22,14 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test board.test.ts"
+    "test": "node --experimental-strip-types --test *.test.ts",
+    "build": "vite build",
+    "prepack": "npm run build"
   },
   "peerDependencies": {
-    "@opencode/plugin": ">=2.0.18",
-    "@opentui/core": ">=0.6.6",
-    "@opentui/solid": ">=0.6.6",
+    "@opencode/plugin": ">=2.2.0 <2.3.0",
+    "@opentui/core": ">=0.7.0",
+    "@opentui/solid": ">=0.7.0",
     "solid-js": ">=1.9.0"
   },
   "peerDependenciesMeta": {
@@ -33,11 +38,16 @@
     }
   },
   "devDependencies": {
-    "@opencode/plugin": "2.1.4",
-    "@opentui/core": "0.6.8",
-    "@opentui/solid": "0.6.8",
+    "@opencode/plugin": "2.2.0",
+    "@opentui/core": "0.7.0",
+    "@opentui/solid": "0.7.0",
     "@types/node": "^26.6.3",
     "solid-js": "1.9.12",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vite-plugin-solid": "2.11.10"
+  },
+  "overrides": {
+    "seroval": "1.6.11"
   }
 }
