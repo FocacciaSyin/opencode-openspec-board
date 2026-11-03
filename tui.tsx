@@ -2,11 +2,12 @@
 import { Plugin, usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { For, Show, createEffect, createSignal } from "solid-js"
+import { For, Show, createEffect, createMemo, createSignal } from "solid-js"
 import { existsSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  boardRows,
   createRootResolver,
   dispatchAction,
   emptyLabel,
@@ -14,12 +15,16 @@ import {
   loadBoard,
   previewTasks,
   startsTaskGroup,
+  resolveSelection,
   retainExpanded,
+  rowKey,
   watchBoard,
   watchConfig,
   stepIndex,
+  type BoardRow,
   type BoardState,
   type Change,
+  type Task,
 } from "./board.ts"
 
 const PLUGIN_ID = "openspec-board"
@@ -81,7 +86,9 @@ function Board(props: {
   reload: () => Promise<void>
 }) {
   const context = usePlugin()
-  const [index, setIndex] = createSignal(0)
+  // 以列的 key 記住選取位置，檔案重新載入或展開／收合時仍停在同一張 change 或同一個任務。
+  const [selectedKey, setSelectedKey] = createSignal<string>()
+  let lastIndex = 0
   let list: ScrollBoxRenderable | undefined
 
   createEffect(() => props.follow(props.panel.sessionID))
@@ -92,17 +99,34 @@ function Board(props: {
     const current = props.state()
     return current.kind === "ready" ? current.changes : []
   }
-  const selectedIndex = () => Math.min(index(), Math.max(0, changes().length - 1))
-  const selected = () => changes()[selectedIndex()]
+  const rows = createMemo(() => boardRows(changes(), props.expanded()))
+  const selectedIndex = createMemo(() => {
+    lastIndex = resolveSelection(rows(), selectedKey(), lastIndex)
+    return lastIndex
+  })
+  const selectedRow = () => rows()[selectedIndex()]
+  const selected = () => selectedRow()?.change
+  const selectedTask = () => selectedRow()?.task
+  const isSelected = (change: Change, task?: Task) => {
+    const row = selectedRow()
+    return row !== undefined && rowKey(row) === rowKey({ change, task })
+  }
+  const select = (change: Change, task?: Task) => {
+    setSelectedKey(rowKey({ change, task }))
+    props.panel.focus()
+  }
+  const expandedRows = (change: Change) => props.expanded().has(change.name) && change.total > 3
+  const rowId = (row: BoardRow) =>
+    row.task ? `openspec-task-${row.change.name}-${row.task.id}` : `openspec-header-${row.change.name}`
   let revealPending = false
   const revealAfterLayout = () => {
     if (!revealPending) return
     revealPending = false
-    const current = selected()
-    if (current && list && !list.isDestroyed) list.scrollChildIntoView(`openspec-header-${current.name}`)
+    const current = selectedRow()
+    if (current && list && !list.isDestroyed) list.scrollChildIntoView(rowId(current))
   }
   const revealSelected = () => {
-    const current = selected()
+    const current = selectedRow()
     if (!current || revealPending) return
     // 繪製前已有本次排版座標，不依賴可能略過的 frame 完成事件。
     revealPending = true
@@ -180,10 +204,16 @@ function Board(props: {
     await send(scope, current)
   }
 
-  /** v：顯示目前 change 下一個任務的完整內文。 */
+  /** v：停在任務列時顯示該任務的完整內文，停在標題列時顯示下一個任務。 */
   const detail = async () => {
     const current = selected()
     if (!current) return
+    const task = selectedTask()
+    if (task) {
+      await context.ui.dialog.alert({ title: `${current.name} · ${task.id}`, message: task.title })
+      props.panel.focus()
+      return
+    }
     if (!current.next) {
       toast(emptyLabel(current) ?? "沒有未完成任務", "info")
       return
@@ -243,24 +273,30 @@ function Board(props: {
       {
         id: "openspec-board.up",
         bind: "k,up",
-        enabled: () => changes().length > 0,
+        enabled: () => rows().length > 0,
         run: () => {
-          setIndex(stepIndex(selectedIndex(), -1, changes().length))
+          setSelectedKey(rowKey(rows()[stepIndex(selectedIndex(), -1, rows().length)]))
         },
       },
       {
         id: "openspec-board.down",
         bind: "j,down",
-        enabled: () => changes().length > 0,
+        enabled: () => rows().length > 0,
         run: () => {
-          setIndex(stepIndex(selectedIndex(), 1, changes().length))
+          setSelectedKey(rowKey(rows()[stepIndex(selectedIndex(), 1, rows().length)]))
         },
       },
       {
         id: "openspec-board.toggle-tasks",
         bind: "return",
         enabled: () => (selected()?.total ?? 0) > 3,
-        run: () => { const current = selected(); if (current) props.toggle(current.name) },
+        // 在任務列按 Enter 會收合所屬 change，游標退回該 change 標題。
+        run: () => {
+          const current = selected()
+          if (!current) return
+          setSelectedKey(rowKey({ change: current }))
+          props.toggle(current.name)
+        },
       },
       {
         id: "openspec-board.reload",
@@ -317,9 +353,9 @@ function Board(props: {
               {/* 標題與第一個任務間留一行；change 之間留兩行，層級比任務間距明顯。 */}
               <box
                 id={`openspec-header-${item.name}`} height={1} flexShrink={0} marginBottom={1}
-                onMouseDown={() => { setIndex(position()); props.panel.focus() }}
+                onMouseDown={() => select(item)}
               >
-                {line(headerLine(item, position() === selectedIndex()), position() === selectedIndex() ? "#7aa2f7" : undefined)}
+                {line(headerLine(item, isSelected(item)), isSelected(item) ? "#7aa2f7" : undefined)}
               </box>
               <Show when={item.total === 0}>
                 <text fg={context.theme.text.muted}>  尚無任務</text>
@@ -337,13 +373,18 @@ function Board(props: {
                       </box>
                     </Show>
                     {/* 同一大項內的任務之間留一行空白，長標題換行時較易分辨。 */}
+                    {/* 只有展開後的任務可被選取；選中時以 > 與標題同色標示。 */}
                     <box
+                      id={rowId({ change: item, task })}
                       flexDirection="row" alignItems="flex-start" flexShrink={0} width="100%"
                       marginTop={taskIndex() > 0 && !startsTaskGroup(item.tasks, taskIndex()) ? 1 : 0}
+                      onMouseDown={() => select(item, expandedRows(item) ? task : undefined)}
                     >
-                      <text fg={context.theme.text.muted} flexShrink={0}>  {task.done ? "[x]" : "[ ]"} {task.id} </text>
+                      <text fg={isSelected(item, task) ? "#7aa2f7" : context.theme.text.muted} flexShrink={0}>
+                        {isSelected(item, task) ? "> " : "  "}{task.done ? "[x]" : "[ ]"} {task.id}{" "}
+                      </text>
                       <text
-                        fg={task.done ? context.theme.text.muted : context.theme.text.base}
+                        fg={isSelected(item, task) ? "#7aa2f7" : task.done ? context.theme.text.muted : context.theme.text.base}
                         flexGrow={1} flexShrink={1} minWidth={0} wrapMode="word"
                       >{task.title}</text>
                     </box>
@@ -352,8 +393,7 @@ function Board(props: {
               </For>
               <Show when={item.total > 3}>
                 <text fg={context.theme.text.base} marginTop={1} onMouseDown={() => {
-                  setIndex(position())
-                  props.panel.focus()
+                  select(item)
                   props.toggle(item.name)
                 }}>
                   {props.expanded().has(item.name) ? "  收合" : `  展開其餘 ${item.total - 3} 項`}

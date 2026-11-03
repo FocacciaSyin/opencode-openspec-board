@@ -51,10 +51,10 @@ Desktop 會讀取全域 `~/.config/opencode/opencode.json(c)` 的 `plugins`，�
 | 操作 | 行為 |
 | --- | --- |
 | `/opsx` | 開啟任務面板；尚未偵測到 OpenSpec 或解析失敗時會先重新偵測一次 |
-| `j` / `k` / `↑` / `↓` | 移動反白 |
-| `Enter` | 展開／收合選中 change 的 tasks；三項以內不需展開 |
+| `j` / `k` / `↑` / `↓` | 移動反白；已展開的 change 可逐一移到每個任務 |
+| `Enter` | 展開／收合選中 change 的 tasks；三項以內不需展開；在任務上按會收合並回到 change 標題 |
 | `r` | 重新偵測 OpenSpec root、重讀 tasks 並重建檔案監看 |
-| `v` | 顯示下一個任務的完整內文 |
+| `v` | 停在任務上時顯示該任務的完整內文；停在 change 標題時顯示下一個任務 |
 | `n` | 只做下一個：以 `openspec-apply-change` skill 送出 `<change> 只做 <task-id>` |
 | `u` | 更新這張 change 的規劃：以 `openspec-update-change` skill 送出 `<change>`（先確認） |
 | `a` | 整張做完：以 `openspec-apply-change` skill 送出 `<change>`（先確認） |

@@ -400,6 +400,35 @@ export function stepIndex(current: number, delta: number, count: number): number
   return (current + delta + count) % count
 }
 
+/** 看板上可用 j/k 選取的一列；沒有 task 代表 change 標題列。 */
+export type BoardRow = { change: Change; task?: Task }
+
+/** 列出可選取列：每張 change 的標題，以及已展開 change（超過三項）的每個任務。 */
+export function boardRows(changes: readonly Change[], expanded: ReadonlySet<string>): BoardRow[] {
+  return changes.flatMap((change) => [
+    { change },
+    ...(expanded.has(change.name) && change.total > 3 ? change.tasks.map((task) => ({ change, task })) : []),
+  ])
+}
+
+/** 選取列的識別值；以 change 名稱與任務 id 組成，檔案重新載入後仍能找回同一列。 */
+export function rowKey(row: BoardRow): string {
+  return row.task ? `${row.change.name}\u0000${row.task.id}` : row.change.name
+}
+
+/** 依 key 找回選取列；任務列消失時退回所屬 change 標題，change 也消失時把原位置夾在範圍內。 */
+export function resolveSelection(rows: readonly BoardRow[], key: string | undefined, fallback: number): number {
+  if (rows.length === 0) return 0
+  if (key !== undefined) {
+    const exact = rows.findIndex((row) => rowKey(row) === key)
+    if (exact >= 0) return exact
+    const name = key.split("\u0000")[0]
+    const header = rows.findIndex((row) => !row.task && row.change.name === name)
+    if (header >= 0) return header
+  }
+  return Math.min(Math.max(0, fallback), rows.length - 1)
+}
+
 /** 面板動作對應的 OpenSpec skill。 */
 export const SKILLS = {
   apply: "openspec-apply-change",

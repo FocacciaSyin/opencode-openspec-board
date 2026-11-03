@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { after, before, describe, test } from "node:test"
 import {
+  boardRows,
   createRootResolver,
   dispatchAction,
   emptyLabel,
@@ -12,8 +13,10 @@ import {
   parseContext,
   parseTasks,
   previewTasks,
+  resolveSelection,
   retainExpanded,
   resolveRoot,
+  rowKey,
   scopedArgs,
   startsTaskGroup,
   stepIndex,
@@ -323,6 +326,34 @@ describe("stepIndex", () => {
 
   test("stays at zero without changes", () => {
     assert.equal(stepIndex(5, 1, 0), 0)
+  })
+})
+
+describe("board rows", () => {
+  // 只有展開的 change 會把每個任務列為可選取列；收合或三項以內的 change 只有標題列。
+  test("lists task rows only for expanded changes", () => {
+    const alpha = change("alpha", 5, 2)
+    const beta = change("beta", 2)
+    const rows = boardRows([alpha, beta], new Set(["alpha", "beta"]))
+    assert.deepEqual(rows.map(rowKey), [
+      "alpha", "alpha\u00001.1", "alpha\u00001.2", "alpha\u00001.3", "alpha\u00001.4", "alpha\u00001.5", "beta",
+    ])
+    assert.equal(rows[1].task, alpha.tasks[0])
+    assert.deepEqual(boardRows([alpha, beta], new Set()).map(rowKey), ["alpha", "beta"])
+  })
+
+  // 重新載入後依 key 找回原選取列；任務消失（如收合）退回所屬 change 標題，change 消失則夾在範圍內。
+  test("resolves the selection by key with fallbacks", () => {
+    const alpha = change("alpha", 5)
+    const rows = boardRows([alpha, change("beta", 1)], new Set(["alpha"]))
+    assert.equal(resolveSelection(rows, "alpha\u00001.3", 0), 3)
+    assert.equal(resolveSelection(rows, "beta", 0), 6)
+
+    const collapsed = boardRows([alpha, change("beta", 1)], new Set())
+    assert.equal(resolveSelection(collapsed, "alpha\u00001.3", 3), 0)
+    assert.equal(resolveSelection(collapsed, "gone", 9), 1)
+    assert.equal(resolveSelection(collapsed, undefined, 0), 0)
+    assert.equal(resolveSelection([], "alpha", 4), 0)
   })
 })
 
