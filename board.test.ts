@@ -15,6 +15,7 @@ import {
   retainExpanded,
   resolveRoot,
   scopedArgs,
+  startsTaskGroup,
   stepIndex,
   watchBoard,
   watchConfig,
@@ -128,6 +129,13 @@ describe("board tasks", () => {
       assert.deepEqual(previewTasks(item, true), item.tasks)
       assert.equal(item.total - previewTasks(item, false).length, Math.max(0, total - 3))
     }
+  })
+
+  // 大項編號改變時才分段：首項與同大項不留白，1.x 接 2.1、2.x 接 10.1 都視為新大項。
+  test("starts a new group only when the major task number changes", () => {
+    const tasks = parseTasks("- [x] 1.1 a\n- [x] 1.2 b\n- [ ] 2.1 c\n- [ ] 2.2 d\n- [ ] 10.1 e")
+    assert.deepEqual(tasks.map((_, index) => startsTaskGroup(tasks, index)), [false, false, true, false, true])
+    assert.equal(startsTaskGroup(tasks, 5), false)
   })
 
   const ready = (...changes: Change[]): BoardState => ({ kind: "ready", changes, done: 0, total: 0 })

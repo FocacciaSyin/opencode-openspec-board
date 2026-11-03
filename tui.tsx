@@ -13,6 +13,7 @@ import {
   formatFooter,
   loadBoard,
   previewTasks,
+  startsTaskGroup,
   retainExpanded,
   watchBoard,
   watchConfig,
@@ -312,14 +313,20 @@ function Board(props: {
                 <text fg={context.theme.text.muted}>  已完成</text>
               </Show>
               <For each={previewTasks(item, props.expanded().has(item.name))}>
-                {(task) => (
-                  <box flexDirection="row" alignItems="flex-start" flexShrink={0} width="100%">
-                    <text fg={context.theme.text.muted} flexShrink={0}>  {task.done ? "[x]" : "[ ]"} {task.id} </text>
-                    <text
-                      fg={task.done ? context.theme.text.muted : context.theme.text.base}
-                      flexGrow={1} flexShrink={1} minWidth={0} wrapMode="word"
-                    >{task.title}</text>
-                  </box>
+                {(task, taskIndex) => (
+                  <>
+                    {/* 大項之間以縮排的細虛線分隔，與 change 之間的實線區隔層級。 */}
+                    <Show when={startsTaskGroup(item.tasks, taskIndex())}>
+                      {line(`  ${"┈".repeat(Math.max(0, width() - 2))}`, "#3b3f54")}
+                    </Show>
+                    <box flexDirection="row" alignItems="flex-start" flexShrink={0} width="100%">
+                      <text fg={context.theme.text.muted} flexShrink={0}>  {task.done ? "[x]" : "[ ]"} {task.id} </text>
+                      <text
+                        fg={task.done ? context.theme.text.muted : context.theme.text.base}
+                        flexGrow={1} flexShrink={1} minWidth={0} wrapMode="word"
+                      >{task.title}</text>
+                    </box>
+                  </>
                 )}
               </For>
               <Show when={item.total > 3}>

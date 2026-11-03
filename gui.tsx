@@ -1,7 +1,7 @@
 /** @jsxImportSource solid-js */
 import { Command, ComposerPill, MenuItem, Panel, Plugin, Style, createKeyed } from "@opencode/plugin/gui"
 import { For, Show, createSignal, onCleanup } from "solid-js"
-import { formatFooter, type BoardState, type Change, type DispatchOptions } from "./board.ts"
+import { formatFooter, startsTaskGroup, type BoardState, type Change, type DispatchOptions } from "./board.ts"
 import { runGuiAction } from "./gui-actions.ts"
 import { BoardRpc } from "./rpc.ts"
 
@@ -143,8 +143,8 @@ export default Plugin.define({
                     <div class="opsx-row"><h3>{change.name}</h3><span>{change.done}/{change.total}</span></div>
                     <Show when={change.total === 0}><p>尚無任務</p></Show>
                     <ul class="opsx-tasks">
-                      <For each={expanded().has(change.name) ? change.tasks : change.tasks.slice(0, 3)}>{(task) => (
-                        <li><span aria-label={task.done ? "已完成" : "未完成"}>{task.done ? "☑" : "☐"}</span><span>{task.id} {task.title}</span></li>
+                      <For each={expanded().has(change.name) ? change.tasks : change.tasks.slice(0, 3)}>{(task, index) => (
+                        <li classList={{ "opsx-group-start": startsTaskGroup(change.tasks, index()) }}><span aria-label={task.done ? "已完成" : "未完成"}>{task.done ? "☑" : "☐"}</span><span>{task.id} {task.title}</span></li>
                       )}</For>
                     </ul>
                     <Show when={change.total > 3}>
@@ -174,7 +174,7 @@ export default Plugin.define({
       .opsx-board h2,.opsx-board h3,.opsx-board p{margin:0;font-size:inherit}.opsx-board h2,.opsx-board h3{font-weight:600}
       .opsx-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.opsx-row h3{min-width:0;overflow-wrap:anywhere}.opsx-row>span{white-space:nowrap}
       .opsx-list{overflow:auto;min-height:0;flex:1}.opsx-change{padding:12px 0;border-bottom:1px solid color-mix(in srgb,currentColor 18%,transparent)}
-      .opsx-tasks{list-style:none;padding:0;margin:12px 0}.opsx-tasks li{display:flex;gap:8px;margin:8px 0}.opsx-tasks li>span:last-child{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
+      .opsx-tasks{list-style:none;padding:0;margin:12px 0}.opsx-tasks li{display:flex;gap:8px;margin:8px 0}.opsx-tasks li>span:last-child{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}.opsx-tasks li.opsx-group-start{margin-top:12px;padding-top:12px;border-top:1px dashed color-mix(in srgb,currentColor 18%,transparent)}
       .opsx-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
     `)
   },

@@ -322,6 +322,12 @@ export function previewTasks(change: Change, expanded: boolean): Task[] {
   return expanded ? change.tasks : change.tasks.slice(0, 3)
 }
 
+/** 判斷任務是否開啟新的大項（如 1.x 之後的 2.1），供畫面在大項之間加上分隔線。 */
+export function startsTaskGroup(tasks: readonly Task[], index: number): boolean {
+  if (index <= 0 || index >= tasks.length) return false
+  return tasks[index].id.split(".")[0] !== tasks[index - 1].id.split(".")[0]
+}
+
 /** 存檔保留仍存在的 change；清空專案狀態時一併重設展開清單。 */
 export function retainExpanded(expanded: ReadonlySet<string>, state: BoardState): Set<string> {
   const names = new Set(state.kind === "ready" ? state.changes.map((change) => change.name) : [])
