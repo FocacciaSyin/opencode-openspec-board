@@ -109,7 +109,8 @@ function Board(props: {
     context.renderer.requestRender()
   }
   createEffect(() => { props.expanded(); revealSelected() })
-  const width = () => Math.max(24, props.panel.width - 4)
+  // 扣除面板邊框與左右各一欄的 paddingX。
+  const width = () => Math.max(24, props.panel.width - 6)
   const line = (text: string, fg?: string) => <text fg={fg} wrapMode="none" truncate>{fit(text, width())}</text>
   const totals = () => {
     const current = props.state()
@@ -292,7 +293,7 @@ function Board(props: {
   }))
 
   return (
-    <box flexDirection="column" width="100%" height="100%" minHeight={0}>
+    <box flexDirection="column" width="100%" height="100%" minHeight={0} paddingX={1}>
       <box flexDirection="column" flexShrink={0}>
         {line(`OpenSpec Tasks   ${changes().length} active · ${totals()}`)}
         {line("─".repeat(width()), "#5a5f7a")}
@@ -309,8 +310,15 @@ function Board(props: {
         <Show when={message()}>{(text) => <text fg={context.theme.text.muted} wrapMode="word">{text()}</text>}</Show>
         <For each={changes()}>
           {(item, position) => (
-            <box id={`openspec-change-${item.name}`} flexDirection="column" flexShrink={0} width="100%">
-              <box id={`openspec-header-${item.name}`} height={1} flexShrink={0} onMouseDown={() => { setIndex(position()); props.panel.focus() }}>
+            <box
+              id={`openspec-change-${item.name}`} flexDirection="column" flexShrink={0} width="100%"
+              marginTop={position() > 0 ? 2 : 0}
+            >
+              {/* 標題與第一個任務間留一行；change 之間留兩行，層級比任務間距明顯。 */}
+              <box
+                id={`openspec-header-${item.name}`} height={1} flexShrink={0} marginBottom={1}
+                onMouseDown={() => { setIndex(position()); props.panel.focus() }}
+              >
                 {line(headerLine(item, position() === selectedIndex()), position() === selectedIndex() ? "#7aa2f7" : undefined)}
               </box>
               <Show when={item.total === 0}>
@@ -322,11 +330,17 @@ function Board(props: {
               <For each={previewTasks(item, props.expanded().has(item.name))}>
                 {(task, taskIndex) => (
                   <>
-                    {/* 大項之間以縮排的細虛線分隔，與 change 之間的實線區隔層級。 */}
+                    {/* 大項之間以縮排的細虛線分隔，上下各留一行，與 change 之間的空行區隔層級。 */}
                     <Show when={startsTaskGroup(item.tasks, taskIndex())}>
-                      {line(`  ${"┈".repeat(Math.max(0, width() - 2))}`, "#3b3f54")}
+                      <box flexShrink={0} marginTop={1} marginBottom={1}>
+                        {line(`  ${"┈".repeat(Math.max(0, width() - 2))}`, "#3b3f54")}
+                      </box>
                     </Show>
-                    <box flexDirection="row" alignItems="flex-start" flexShrink={0} width="100%">
+                    {/* 同一大項內的任務之間留一行空白，長標題換行時較易分辨。 */}
+                    <box
+                      flexDirection="row" alignItems="flex-start" flexShrink={0} width="100%"
+                      marginTop={taskIndex() > 0 && !startsTaskGroup(item.tasks, taskIndex()) ? 1 : 0}
+                    >
                       <text fg={context.theme.text.muted} flexShrink={0}>  {task.done ? "[x]" : "[ ]"} {task.id} </text>
                       <text
                         fg={task.done ? context.theme.text.muted : context.theme.text.base}
@@ -337,7 +351,7 @@ function Board(props: {
                 )}
               </For>
               <Show when={item.total > 3}>
-                <text fg={context.theme.text.base} onMouseDown={() => {
+                <text fg={context.theme.text.base} marginTop={1} onMouseDown={() => {
                   setIndex(position())
                   props.panel.focus()
                   props.toggle(item.name)
@@ -345,7 +359,6 @@ function Board(props: {
                   {props.expanded().has(item.name) ? "  收合" : `  展開其餘 ${item.total - 3} 項`}
                 </text>
               </Show>
-              {position() < changes().length - 1 ? line(" ") : null}
             </box>
           )}
         </For>
