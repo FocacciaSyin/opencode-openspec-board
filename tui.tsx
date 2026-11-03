@@ -78,6 +78,7 @@ function Board(props: {
   follow: (sessionID?: string) => void
   expanded: () => ReadonlySet<string>
   toggle: (name: string) => void
+  reload: () => Promise<void>
 }) {
   const context = usePlugin()
   const [index, setIndex] = createSignal(0)
@@ -260,6 +261,11 @@ function Board(props: {
         enabled: () => (selected()?.total ?? 0) > 3,
         run: () => { const current = selected(); if (current) props.toggle(current.name) },
       },
+      {
+        id: "openspec-board.reload",
+        bind: "r",
+        run: () => void props.reload().then(() => toast("已重新載入", "info")),
+      },
       { id: "openspec-board.next-task", bind: "n", run: () => void apply("next") },
       { id: "openspec-board.detail", bind: "v", run: () => void detail() },
       {
@@ -275,6 +281,7 @@ function Board(props: {
       "openspec-board.up",
       "openspec-board.down",
       "openspec-board.toggle-tasks",
+      "openspec-board.reload",
       "openspec-board.next-task",
       "openspec-board.detail",
       "openspec-board.update",
@@ -346,7 +353,7 @@ function Board(props: {
       <box flexDirection="column" flexShrink={0}>
         {line("─".repeat(width()), "#5a5f7a")}
         <text fg={context.theme.text.muted} wrapMode="word">   v 全文   n 下一個   u 更新   a 整張   x 封存</text>
-        <text fg={context.theme.text.muted} wrapMode="word">   Enter 展開/收合   j/k ↑↓ 移動   q/Esc 關閉</text>
+        <text fg={context.theme.text.muted} wrapMode="word">   Enter 展開/收合   j/k ↑↓ 移動   r 重新載入   q/Esc 關閉</text>
       </box>
     </box>
   )
@@ -430,6 +437,12 @@ export default disabled()
         watchDir(baseDir)
         void boot(baseDir)
 
+        /** r：重新解析 root、重讀 tasks 並重建 watcher，作為自動更新失效時的手動補救。 */
+        const reload = async () => {
+          resolver.forget(dir())
+          await boot(dir())
+        }
+
         const sessionDir = (sessionID?: string) => {
           if (!sessionID) return undefined
           try {
@@ -508,7 +521,7 @@ export default disabled()
           append: "session.panel",
           render: (panel) => (
             <Show when={panel.name === PANEL_NAME}>
-              <Board panel={panel} state={() => sessionState(panel.sessionID)} follow={follow} expanded={expanded} toggle={toggleTasks} />
+              <Board panel={panel} state={() => sessionState(panel.sessionID)} follow={follow} expanded={expanded} toggle={toggleTasks} reload={reload} />
             </Show>
           ),
         })

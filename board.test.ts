@@ -401,6 +401,37 @@ describe("watchBoard late directories", () => {
     stop()
     rmSync(dir, { recursive: true, force: true })
   })
+
+  // changes 目錄本身被刪除後重建（如切換分支），watcher 仍要接回新目錄並通知後續的勾選。
+  test("re-attaches when the changes directory is removed and recreated", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "openspec-recreate-board-"))
+    const changes = join(dir, "openspec", "changes")
+    mkdirSync(join(changes, "one"), { recursive: true })
+    writeFileSync(join(changes, "one", "tasks.md"), "- [ ] 1.1 a\n")
+
+    let calls = 0
+    const stop = watchBoard(dir, () => {
+      calls += 1
+    })
+
+    try {
+      rmSync(changes, { recursive: true })
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      assert.ok(calls >= 1, "watcher should notice the removed changes directory")
+
+      mkdirSync(join(changes, "two"), { recursive: true })
+      writeFileSync(join(changes, "two", "tasks.md"), "- [ ] 1.1 b\n")
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      const recreated = calls
+
+      writeFileSync(join(changes, "two", "tasks.md"), "- [x] 1.1 b\n")
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      assert.ok(calls > recreated, "watcher should re-attach to the recreated changes directory")
+    } finally {
+      stop()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe("formatFooter", () => {

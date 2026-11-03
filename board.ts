@@ -129,12 +129,15 @@ export function createRootResolver(run: ContextRunner = runContext): RootResolve
 
 /**
  * 綁定 fs.watch：目標不存在時退到最近存在的上層目錄，目標出現後才改成遞迴監看目標。
- * 只在綁定路徑改變時重綁，避免每次存檔都重建 watcher。
- * shortcut: 被監看的目錄本身被刪除時 Windows 的 fs.watch 不一定發事件，等真的回報再處理。
+ * 只在綁定路徑或目錄本體改變時重綁，避免每次存檔都重建 watcher。
+ * 目標本身被刪除時 Windows 的遞迴 watcher 不會發事件，因此另以非遞迴方式監看上層目錄補足。
  */
 function watchNearest(target: string, onChange: () => void): () => void {
+  const goal = resolve(target)
   let watcher: FSWatcher | undefined
+  let parentWatcher: FSWatcher | undefined
   let bound = ""
+  let boundIdentity = ""
   let timer: ReturnType<typeof setTimeout> | undefined
 
   const nearest = (path: string): string | undefined => {
@@ -147,26 +150,72 @@ function watchNearest(target: string, onChange: () => void): () => void {
     }
   }
 
-  const bind = () => {
-    const next = nearest(target) ?? ""
-    if (next === bound) return
-    watcher?.close()
-    watcher = undefined
-    bound = next
-    if (!next) return
+  /** 以 dev+ino 辨識目錄本體；同路徑刪除後重建會得到不同值。 */
+  const identityOf = (path: string): string => {
     try {
-      watcher = watch(next, { recursive: next === resolve(target) }, () => {
-        if (timer) clearTimeout(timer)
-        timer = setTimeout(() => {
-          timer = undefined
-          bind()
-          onChange()
-        }, 150)
-      })
-      watcher.on("error", () => {})
+      const stat = statSync(path, { bigint: true })
+      return `${stat.dev}:${stat.ino}`
     } catch {
+      return ""
+    }
+  }
+
+  const schedule = () => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = undefined
+      bind()
+      onChange()
+    }, 150)
+  }
+
+  /**
+   * Windows 上遞迴監看的目錄本身被刪除後，fs.watch 會無限重複發出 rename 事件，
+   * 持續重設 debounce 使 onChange 永遠不觸發；偵測到目錄本體已變就立即關閉舊 watcher。
+   */
+  const onEvent = () => {
+    if (watcher && identityOf(bound) !== boundIdentity) {
+      watcher.close()
       watcher = undefined
+    }
+    schedule()
+  }
+
+  const open = (path: string, recursive: boolean): FSWatcher | undefined => {
+    try {
+      const created = watch(path, { recursive }, onEvent)
+      // watcher 出錯後即失效，交由下一次重綁接手。
+      created.on("error", () => {
+        bound = ""
+        schedule()
+      })
+      return created
+    } catch {
+      return undefined
+    }
+  }
+
+  const bind = () => {
+    const next = nearest(goal) ?? ""
+    const identity = next ? identityOf(next) : ""
+    if (next === bound && identity === boundIdentity) return
+    watcher?.close()
+    parentWatcher?.close()
+    watcher = undefined
+    parentWatcher = undefined
+    bound = next
+    boundIdentity = identity
+    if (!next) return
+
+    watcher = open(next, next === goal)
+    if (!watcher) {
       bound = ""
+      boundIdentity = ""
+      return
+    }
+    if (next === goal) {
+      const parent = dirname(goal)
+      if (parent !== goal) parentWatcher = open(parent, false)
     }
   }
 
@@ -175,6 +224,7 @@ function watchNearest(target: string, onChange: () => void): () => void {
   return () => {
     if (timer) clearTimeout(timer)
     watcher?.close()
+    parentWatcher?.close()
   }
 }
 
